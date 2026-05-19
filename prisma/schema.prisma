@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  profileId         String    @unique
+  password          String
+  status            String    @default("pending")
+
+  // Name
+  firstName         String?
+  lastName          String?
+  fullName          String    // firstName + " " + lastName, kept for compatibility
+
+  // Personal
+  dateOfBirth       DateTime
+  age               Int?
+  height            Float?
+  weight            Float?
+
+  // Background
+  education         String?
+  occupation        String?
+  familyMembers     Int?
+  maritalStatus     String?
+  tattooStatus      String?
+  ethnicity         String?
+  religion          String?
+
+  // Place of birth
+  birthProvince     String?
+  birthDistrict     String?
+  birthVillage      String?
+
+  // Current address
+  currentProvince   String?
+  currentDistrict   String?
+  currentVillage    String?
+  currentAddress    String?   // legacy flat field
+
+  // Contact & social
+  phone             String
+  secondaryPhone    String?
+  facebookUrl       String?
+  tiktokUrl         String?
+
+  // Documents & media
+  nationalIdUrl     String?
+  passportUrl       String?
+  familyDocUrl      String?
+  photos            String[]
+
+  // Flags
+  emailVerified     Boolean   @default(false)
+  isProfileComplete Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  selections Selection[]
+}
+
+model Agency {
+  id                  String      @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId            String      @unique
+  companyName         String
+  email               String      @unique
+  password            String
+  role                String      @default("agency")
+  status              String      @default("pending")
+  isVerified          Boolean     @default(false)
+  membershipExpiresAt DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  payments   Payment[]
+  selections Selection[]
+}
+
+model MembershipPackage {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  description  String?
+  price        Float
+  durationDays Int
+  features     String[]
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  payments Payment[]
+}
+
+model Payment {
+  id                  String            @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId            String            @db.ObjectId
+  packageId           String            @db.ObjectId
+  packageName         String?
+  amount              Float
+  currency            String            @default("USD")
+  status              String            @default("pending")
+  paymentMethod       String
+  receiptUrl          String?
+  notes               String?
+  verifiedBy          String?           @db.ObjectId
+  verifiedAt          DateTime?
+  membershipStartDate DateTime?
+  membershipEndDate   DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  agency  Agency            @relation(fields: [agencyId], references: [id])
+  package MembershipPackage @relation(fields: [packageId], references: [id])
+}
+
+model Selection {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId    String   @db.ObjectId
+  applicantId String   @db.ObjectId
+  selectedAt  DateTime @default(now())
+  expiresAt   DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agency    Agency @relation(fields: [agencyId], references: [id])
+  applicant User   @relation(fields: [applicantId], references: [id])
+
+  @@unique([agencyId, applicantId])
+}
