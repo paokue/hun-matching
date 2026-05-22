@@ -10,6 +10,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { Toaster } from "sonner";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { I18nContext } from "~/lib/i18n";
@@ -43,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body className="h-full bg-slate-50 font-sans antialiased">
         {children}
+        <Toaster position="bottom-right" richColors />
         <ScrollRestoration />
         <Scripts />
       </body>
