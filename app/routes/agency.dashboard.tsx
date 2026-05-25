@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link, redirect, Form, useFetcher, useNavigate } from "react-router";
+import { Link, redirect, Form, useFetcher, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { SELECTED_POOL } from "~/lib/selectedPool";
 import type { Route } from "./+types/agency.dashboard";
@@ -129,6 +129,7 @@ const PAGE_SIZE = 30; // 5 cols × 6 rows
 // ── Pending / Suspended gate ─────────────────────────────────────────────────
 function AgencyGate({ agency }: { agency: { companyName: string; agencyId: string; status: string } }) {
   const isPending = agency.status === "pending";
+  const g = useT().agencyGate;
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-20">
       <div className="max-w-md w-full text-center">
@@ -136,20 +137,18 @@ function AgencyGate({ agency }: { agency: { companyName: string; agencyId: strin
           {isPending ? "⏳" : "🚫"}
         </div>
         <h2 className="text-2xl font-bold text-slate-900 mb-3">
-          {isPending ? "Account Pending Approval" : "Account Suspended"}
+          {isPending ? g.pendingTitle : g.suspendedTitle}
         </h2>
         <p className="text-slate-500 mb-8 leading-relaxed">
-          {isPending
-            ? "Your agency account has been submitted and is awaiting review. You'll have full access once approved."
-            : "Your agency account has been suspended. Please contact support for assistance."}
+          {isPending ? g.pendingDesc : g.suspendedDesc}
         </p>
         <div className={`rounded-xl p-4 text-sm mb-8 ${isPending ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
           <p className="font-medium">{agency.companyName}</p>
-          <p className="opacity-75 mt-0.5">Agency ID: {agency.agencyId}</p>
+          <p className="opacity-75 mt-0.5">{g.agencyIdLabel} {agency.agencyId}</p>
         </div>
         <Form method="post" action="/agency/logout">
           <button type="submit" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
-            Sign out
+            {g.signOut}
           </button>
         </Form>
       </div>
@@ -164,6 +163,16 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
 
   const confirmFetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Toast after a successful registration redirect (?registered=1)
+  useEffect(() => {
+    if (searchParams.get("registered") === "1") {
+      toast.success(t.agencyRegister.successMsg);
+      setSearchParams((p) => { p.delete("registered"); return p; }, { replace: true });
+    }
+  }, [searchParams]);
+
   const [activeTab, setActiveTab] = useState<"new" | "selected">("new");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
@@ -880,30 +889,30 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
               </svg>
             </button>
 
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-400 to-pink-600 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-rose-200">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-rose-200">
               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
 
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Membership Required</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">{t.agencyDashboard.membershipRequired}</h2>
             <p className="text-slate-500 text-sm leading-relaxed mb-8">
-              Subscribe to a membership plan to view full applicant profiles, contact details, and start selecting candidates.
+              {t.agencyDashboard.membershipRequiredDesc}
             </p>
 
             <div className="flex flex-col gap-3">
               <Link
                 to="/agency/membership"
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold text-sm shadow-md shadow-rose-200 hover:shadow-lg hover:shadow-rose-300 transition-all duration-200 block"
+                className="w-full py-3 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-semibold text-sm shadow-md shadow-rose-200 hover:shadow-lg hover:shadow-rose-300 transition-all duration-200 block"
                 onClick={() => setShowSubscribeModal(false)}
               >
-                View Membership Packages
+                {t.agencyDashboard.viewMembershipPackages}
               </Link>
               <button
                 onClick={() => setShowSubscribeModal(false)}
                 className="w-full py-3 rounded-2xl bg-slate-50 text-slate-500 font-medium text-sm hover:bg-slate-100 transition-colors"
               >
-                Maybe Later
+                {t.agencyDashboard.maybeLater}
               </button>
             </div>
           </div>
