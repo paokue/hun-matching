@@ -19,6 +19,7 @@ model User {
   id                String    @id @default(auto()) @map("_id") @db.ObjectId
   profileId         String    @unique
   password          String
+  // status: pending | active | selected | ban | inactive | matched
   status            String    @default("pending")
 
   // Name
@@ -59,10 +60,12 @@ model User {
   tiktokUrl         String?
 
   // Documents & media
-  nationalIdUrl     String?
+  nationalIdUrl     String?   // ID card — front side
+  nationalIdBackUrl String?   // ID card — back side
   passportUrl       String?
   familyDocUrl      String?
-  photos            String[]
+  profileImage      String?   // main profile / avatar photo
+  photos            String[]  // legacy flat gallery, mirrors GalleryImage urls
 
   // Flags
   emailVerified     Boolean   @default(false)
@@ -70,7 +73,20 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  selections Selection[]
+  selections    Selection[]
+  galleryImages GalleryImage[]
+}
+
+model GalleryImage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  url       String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model Agency {

@@ -32,12 +32,12 @@ export async function action({ request }: Route.ActionArgs) {
   await prisma.user.update({
     where: { id: uid },
     data: {
-      birthProvince:   g("birthProvince")   || undefined,
-      birthDistrict:   g("birthDistrict").trim() || undefined,
-      birthVillage:    g("birthVillage").trim()  || undefined,
+      birthProvince: g("birthProvince") || undefined,
+      birthDistrict: g("birthDistrict").trim() || undefined,
+      birthVillage: g("birthVillage").trim() || undefined,
       currentProvince: g("currentProvince") || undefined,
       currentDistrict: g("currentDistrict").trim() || undefined,
-      currentVillage:  g("currentVillage").trim()  || undefined,
+      currentVillage: g("currentVillage").trim() || undefined,
     },
   });
 
@@ -54,9 +54,9 @@ export default function RegisterStep2({ loaderData, actionData }: Route.Componen
   function AddressBlock({ prefix, saved }: { prefix: "birth" | "current"; saved: { province?: string | null; district?: string | null; village?: string | null } }) {
     return (
       <div className="grid sm:grid-cols-3 gap-4">
-        <Select label={r.provinceLabel} name={`${prefix}Province`} placeholder={r.provincePh} options={LAO_PROVINCES.map((p) => ({ value: p, label: p }))} defaultValue={saved.province ?? ""} />
-        <Input  label={r.districtLabel} name={`${prefix}District`} placeholder={r.districtPh} defaultValue={saved.district ?? ""} />
-        <Input  label={r.villageLabel}  name={`${prefix}Village`}  placeholder={r.villagePh}  defaultValue={saved.village  ?? ""} />
+        <Select label={r.provinceLabel} required name={`${prefix}Province`} placeholder={r.provincePh} options={LAO_PROVINCES.map((p) => ({ value: p, label: t.enums.provinces[p] }))} defaultValue={saved.province ?? ""} />
+        <Input label={r.districtLabel} required name={`${prefix}District`} placeholder={r.districtPh} defaultValue={saved.district ?? ""} />
+        <Input label={r.villageLabel} required name={`${prefix}Village`} placeholder={r.villagePh} defaultValue={saved.village ?? ""} />
       </div>
     );
   }
@@ -67,8 +67,8 @@ export default function RegisterStep2({ loaderData, actionData }: Route.Componen
       <main className="flex-1 py-10 px-4">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-2">
-            <h1 className="text-2xl font-bold text-slate-900">Addresses</h1>
-            <p className="text-slate-500 mt-1 text-sm">Hi {user.fullName} — where are you from?</p>
+            <h1 className="text-2xl font-bold text-slate-900">{r.addressesTitle}</h1>
+            <p className="text-slate-500 mt-1 text-sm">{r.addressesSubtitle.replace("{name}", user.fullName)}</p>
           </div>
 
           <StepIndicator current={2} />
@@ -98,10 +98,10 @@ export default function RegisterStep2({ loaderData, actionData }: Route.Componen
 
             <div className="flex gap-3">
               <Link to="/register" className="flex-1">
-                <Button variant="outline" size="lg" className="w-full">← Back</Button>
+                <Button variant="outline" size="lg" className="w-full">{r.backBtn}</Button>
               </Link>
               <Button type="submit" size="lg" loading={isSubmitting} className="flex-1">
-                {isSubmitting ? "Saving..." : "Next: Account →"}
+                {isSubmitting ? r.savingBtn : r.nextPhotosBtn}
               </Button>
             </div>
           </Form>

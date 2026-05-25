@@ -38,6 +38,7 @@ export default [
     route("dashboard", "routes/agency.dashboard.tsx"),
     route("search", "routes/agency.search.tsx"),
     route("profile/:id", "routes/agency.profile.$id.tsx"),
+    route("applicant/:id", "routes/agency.applicant.$id.tsx"),
     route("membership", "routes/agency.membership.tsx"),
     route("selections", "routes/agency.selections.tsx"),
   ]),

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link, redirect, Form, useFetcher } from "react-router";
+import { Link, redirect, Form, useFetcher, useNavigate } from "react-router";
 import { toast } from "sonner";
+import { SELECTED_POOL } from "~/lib/selectedPool";
 import type { Route } from "./+types/agency.dashboard";
 import { requireAgency } from "~/lib/auth.server";
 import { Navbar } from "~/components/layout/Navbar";
@@ -162,13 +163,32 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
   const t = useT();
 
   const confirmFetcher = useFetcher<typeof action>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"new" | "selected">("new");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [previewProfile, setPreviewProfile] = useState<FakeProfile | null>(null);
+  const [contactedIds, setContactedIds] = useState<Set<string>>(new Set());
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [selectedView, setSelectedView] = useState<"grid" | "list">("grid");
   const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  function toggleContacted(id: string, name: string) {
+    setContactedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        toast.success(`${name} unmarked as contacted.`);
+      } else {
+        next.add(id);
+        toast.success(`${name} marked as contacted.`);
+      }
+      return next;
+    });
+    setOpenMenuId(null);
+  }
 
   // Toast on confirm result
   useEffect(() => {
@@ -334,9 +354,9 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                     </TabsTrigger>
                     <TabsTrigger value="selected">
                       Selected
-                      {activeSelections.length > 0 && (
+                      {SELECTED_POOL.length > 0 && (
                         <span className="ml-1 inline-flex items-center justify-center rounded-full bg-white/30 px-1.5 py-0.5 text-xs font-semibold">
-                          {activeSelections.length}
+                          {SELECTED_POOL.length}
                         </span>
                       )}
                     </TabsTrigger>
@@ -447,7 +467,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                 {/* ── Selected Applicants tab ── */}
                 <TabsContent value="selected">
                   <div>
-                    {activeSelections.length === 0 ? (
+                    {SELECTED_POOL.length === 0 ? (
                       <div className="text-center py-24 bg-white rounded-2xl border border-slate-100 shadow-sm">
                         <div className="w-16 h-16 rounded-2xl bg-rose-50 flex items-center justify-center mx-auto mb-4">
                           <svg className="w-8 h-8 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -458,47 +478,204 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                         <p className="text-slate-400 text-sm mt-1">Browse the New Applicants tab to start selecting.</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {activeSelections.map((sel) => (
-                          <Link key={sel.id} to={`/agency/profile/${sel.applicant.id}`} className="group">
-                            <div className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm group-hover:shadow-xl group-hover:border-rose-200 group-hover:-translate-y-1 transition-all duration-300">
-                              <div className="aspect-[3/4] relative overflow-hidden bg-slate-100">
-                                {sel.applicant.photos?.[0] ? (
-                                  <img
-                                    src={sel.applicant.photos[0]}
-                                    alt={sel.applicant.profileId}
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-slate-200 text-4xl">👤</div>
-                                )}
-                                {/* Hover overlay */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 pointer-events-none">
-                                  <p className="text-white font-bold text-sm leading-tight translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                                    {sel.applicant.fullName || sel.applicant.profileId}
-                                  </p>
-                                  <p className="text-white/75 text-xs mt-0.5 translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75">
-                                    View profile →
-                                  </p>
-                                </div>
-                                {/* Selected badge */}
-                                <div className="absolute top-2 left-2">
-                                  <span className="inline-flex items-center gap-1 bg-rose-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold shadow-md">
-                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
-                                    {t.agencyDashboard.selected}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="px-3 py-2.5">
-                                <p className="text-xs font-semibold text-slate-800 truncate">{sel.applicant.profileId}</p>
-                                <p className="text-xs text-slate-400 mt-0.5">{t.agencyDashboard.expires} {formatDate(sel.expiresAt)}</p>
-                              </div>
-                            </div>
-                          </Link>
-                        ))}
+                      <>
+                      {/* View toggle */}
+                      <div className="flex justify-end mb-4">
+                        <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+                          <button
+                            onClick={() => setSelectedView("grid")}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedView === "grid" ? "bg-rose-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                            </svg>
+                            Grid
+                          </button>
+                          <button
+                            onClick={() => setSelectedView("list")}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedView === "list" ? "bg-rose-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                            List
+                          </button>
+                        </div>
                       </div>
+
+                      {selectedView === "grid" ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                          {SELECTED_POOL.map((sel) => {
+                            const isContacted = contactedIds.has(sel.id);
+                            return (
+                              <div
+                                key={sel.id}
+                                className="group cursor-pointer"
+                                onClick={() => navigate(`/agency/applicant/${sel.id}`)}
+                              >
+                                <div className={`bg-white rounded-2xl overflow-hidden border shadow-sm group-hover:shadow-xl group-hover:-translate-y-1 transition-all duration-300 ${isContacted ? "border-emerald-300 ring-2 ring-emerald-200" : "border-slate-100 group-hover:border-rose-200"}`}>
+                                  <div className="aspect-[3/4] relative overflow-hidden bg-slate-100">
+                                    <img
+                                      src={sel.photo}
+                                      alt={sel.name}
+                                      className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isContacted ? "grayscale-[35%]" : ""}`}
+                                    />
+                                    {/* Gradient + name */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent pointer-events-none" />
+                                    <div className="absolute bottom-0 left-0 p-3 pointer-events-none">
+                                      <p className="text-white font-bold text-sm leading-tight drop-shadow">{sel.name}</p>
+                                      <p className="text-white/80 text-xs mt-0.5 drop-shadow">{sel.age} yrs</p>
+                                    </div>
+                                    {/* Status badge */}
+                                    <div className="absolute top-2 left-2">
+                                      {isContacted ? (
+                                        <span className="inline-flex items-center gap-1 bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold shadow-md">
+                                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          Contacted
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 bg-rose-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold shadow-md">
+                                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                          </svg>
+                                          {t.agencyDashboard.selected}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* 3-dots menu */}
+                                    <div className="absolute top-2 right-2">
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === sel.id ? null : sel.id); }}
+                                        className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center transition-colors"
+                                      >
+                                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                          <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                                        </svg>
+                                      </button>
+
+                                      {openMenuId === sel.id && (
+                                        <div
+                                          className="absolute top-9 right-0 z-20 w-44 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 overflow-hidden"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <Link
+                                            to={`/agency/applicant/${sel.id}`}
+                                            className="flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                          >
+                                            <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            View detail
+                                          </Link>
+                                          <button
+                                            onClick={() => toggleContacted(sel.id, sel.name)}
+                                            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                          >
+                                            <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            {isContacted ? "Unmark contact" : "Mark as contact"}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                <th className="px-4 py-3">Applicant</th>
+                                <th className="px-4 py-3">Age</th>
+                                <th className="px-4 py-3 hidden sm:table-cell">Occupation</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Location</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {SELECTED_POOL.map((sel) => {
+                                const isContacted = contactedIds.has(sel.id);
+                                return (
+                                  <tr
+                                    key={sel.id}
+                                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                                    onClick={() => navigate(`/agency/applicant/${sel.id}`)}
+                                  >
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-3">
+                                        <img src={sel.photo} alt={sel.name} className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${isContacted ? "grayscale-[35%]" : ""}`} />
+                                        <div className="min-w-0">
+                                          <p className="font-semibold text-slate-800 truncate">{sel.name}</p>
+                                          <p className="text-xs text-slate-400">{sel.profileId}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{sel.age} yrs</td>
+                                    <td className="px-4 py-3 text-slate-600 hidden sm:table-cell">{sel.occupation}</td>
+                                    <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{sel.currentProvince}</td>
+                                    <td className="px-4 py-3">
+                                      {isContacted ? (
+                                        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 text-xs px-2 py-1 rounded-full font-semibold whitespace-nowrap">
+                                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          Contacted
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-600 text-xs px-2 py-1 rounded-full font-semibold whitespace-nowrap">
+                                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                          </svg>
+                                          {t.agencyDashboard.selected}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                        <Link
+                                          to={`/agency/applicant/${sel.id}`}
+                                          title="View detail"
+                                          className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:border-rose-300 hover:text-rose-500 transition-colors"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                          </svg>
+                                        </Link>
+                                        <button
+                                          onClick={() => toggleContacted(sel.id, sel.name)}
+                                          title={isContacted ? "Unmark contact" : "Mark as contact"}
+                                          className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${isContacted ? "border-emerald-300 text-emerald-500 bg-emerald-50" : "border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-500"}`}
+                                        >
+                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Click-away overlay to close menu */}
+                      {openMenuId && (
+                        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                      )}
+                      </>
                     )}
                   </div>
                 </TabsContent>

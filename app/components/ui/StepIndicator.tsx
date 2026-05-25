@@ -1,15 +1,17 @@
-const STEPS = [
-  { n: 1, label: "Personal" },
-  { n: 2, label: "Addresses" },
-  { n: 3, label: "Account" },
-  { n: 4, label: "Document" },
-];
+import { useT } from "~/lib/i18n";
 
 interface StepIndicatorProps {
   current: number;
 }
 
 export function StepIndicator({ current }: StepIndicatorProps) {
+  const t = useT();
+  const STEPS = [
+    { n: 1, label: t.register.stepPersonal },
+    { n: 2, label: t.register.stepAddresses },
+    { n: 3, label: t.register.stepPhotos },
+    { n: 4, label: t.register.stepDocument },
+  ];
   return (
     <div className="flex items-start justify-center mb-8">
       {STEPS.map((step, i) => (
