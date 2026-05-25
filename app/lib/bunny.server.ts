@@ -1,10 +1,10 @@
 const BUNNY_API_KEY = process.env.BUNNY_CDN_API_KEY!;
 const STORAGE_ZONE = process.env.BUNNY_CDN_STORAGE_ZONE!;
-const CDN_HOSTNAME = process.env.BUNNY_CDN_HOSTNAME!;
+const CDN_HOST = process.env.BUNNY_CDN_HOST!; // pull-zone host, includes protocol
 const BUNNY_STORAGE_URL = `https://storage.bunnycdn.com/${STORAGE_ZONE}`;
 
 export function getCDNUrl(path: string) {
-  return `https://${CDN_HOSTNAME}/${path}`;
+  return `${CDN_HOST}/${path}`;
 }
 
 export async function uploadToBunny(
@@ -38,14 +38,17 @@ export async function deleteFromBunny(path: string): Promise<void> {
   }
 }
 
+// Files are keyed by a stable identifier (phone for applicants, agencyId for agencies).
+// e.g. generateFilePath("profile", "+856 20 5512 3456", "x.jpg") → "profile/1716600000000-8562055123456.jpg"
 export function generateFilePath(
   folder: string,
-  userId: string,
+  key: string,
   filename: string
 ): string {
   const ext = filename.split(".").pop();
-  const timestamp = Date.now();
-  return `${folder}/${userId}/${timestamp}.${ext}`;
+  const rand = Date.now();
+  const cleanKey = (key || "unknown").replace(/[^0-9a-zA-Z]/g, "");
+  return `${folder}/${rand}-${cleanKey}.${ext}`;
 }
 
 export async function parseMultipartForm(request: Request): Promise<{

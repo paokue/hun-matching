@@ -65,7 +65,7 @@ export async function action({ request }: Route.ActionArgs) {
   let profileImageUrl: string | undefined;
   const profileFile = files.profileImage?.[0];
   if (profileFile && profileFile.contentType.startsWith("image/") && profileFile.buffer.length <= MAX_BYTES) {
-    const path = generateFilePath("profile", uid, profileFile.filename);
+    const path = generateFilePath("profile", phone, profileFile.filename);
     profileImageUrl = await uploadToBunny(profileFile.buffer, path, profileFile.contentType);
   }
 
@@ -74,7 +74,7 @@ export async function action({ request }: Route.ActionArgs) {
   for (const file of (files.gallery ?? []).slice(0, MAX_IMAGES)) {
     if (!file.contentType.startsWith("image/")) continue;
     if (file.buffer.length > MAX_BYTES) continue;
-    const path = generateFilePath("gallery", uid, file.filename);
+    const path = generateFilePath("gallery", phone, file.filename);
     galleryUrls.push(await uploadToBunny(file.buffer, path, file.contentType));
   }
   if (galleryUrls.length > 0) {
@@ -199,8 +199,8 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input label={r.passwordLabel} name="password" type="password" placeholder={r.passwordPh} required error={errors.password} hint={r.passwordHint} />
-                  <Input label={r.confirmPasswordLabel} name="confirmPassword" type="password" placeholder={r.confirmPasswordPh} required error={errors.confirmPassword} />
+                  <Input label={r.passwordLabel} name="password" showPasswordToggle placeholder={r.passwordPh} required error={errors.password} hint={r.passwordHint} />
+                  <Input label={r.confirmPasswordLabel} name="confirmPassword" showPasswordToggle placeholder={r.confirmPasswordPh} required error={errors.confirmPassword} />
                 </div>
               </div>
             </Card>

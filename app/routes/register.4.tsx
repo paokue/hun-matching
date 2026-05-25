@@ -15,7 +15,7 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: "Register — Step 4 of 4" }];
 }
 
-// Custom centered file picker with translated button + filename (module-level so its state persists)
+// Custom centered file picker with translated button + live preview (module-level so its state persists)
 function FilePicker({ name, accept, title, dragHint, chooseLabel, noFileLabel }: {
   name: string;
   accept: string;
@@ -25,23 +25,60 @@ function FilePicker({ name, accept, title, dragHint, chooseLabel, noFileLabel }:
   noFileLabel: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState("");
+  const [picked, setPicked] = useState<{ name: string; url: string | null } | null>(null);
+
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (picked?.url) URL.revokeObjectURL(picked.url);
+    if (!f) { setPicked(null); return; }
+    setPicked({ name: f.name, url: f.type.startsWith("image/") ? URL.createObjectURL(f) : null });
+  }
+
   return (
     <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-rose-300 transition-colors flex flex-col items-center">
       {title && <p className="text-sm font-semibold text-slate-700 mb-2">{title}</p>}
-      <p className="text-slate-400 text-sm mb-4">{dragHint}</p>
-      <input ref={ref} type="file" name={name} accept={accept} required className="hidden" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
-      <button
-        type="button"
-        onClick={() => ref.current?.click()}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-50 text-rose-600 text-sm font-semibold hover:bg-rose-100 transition-colors"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 7.5L12 3m0 0L7.5 7.5M12 3v13.5" />
-        </svg>
-        {chooseLabel}
-      </button>
-      <p className="text-sm text-slate-500 mt-3 truncate max-w-full">{fileName || noFileLabel}</p>
+      <input ref={ref} type="file" name={name} accept={accept} required className="hidden" onChange={onChange} />
+
+      {picked ? (
+        <>
+          {picked.url ? (
+            <img src={picked.url} alt={picked.name} className="max-h-44 w-auto rounded-lg object-contain shadow-sm" />
+          ) : (
+            <div className="flex flex-col items-center justify-center w-28 h-32 rounded-lg bg-rose-50 text-rose-500">
+              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
+              </svg>
+              <span className="text-[10px] font-bold mt-1">PDF</span>
+            </div>
+          )}
+          <p className="text-xs text-slate-500 mt-2 truncate max-w-full">{picked.name}</p>
+          <button
+            type="button"
+            onClick={() => ref.current?.click()}
+            className="inline-flex items-center gap-1.5 px-4 py-2 mt-3 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            {chooseLabel}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-slate-400 text-sm mb-4">{dragHint}</p>
+          <button
+            type="button"
+            onClick={() => ref.current?.click()}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-50 text-rose-600 text-sm font-semibold hover:bg-rose-100 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 7.5L12 3m0 0L7.5 7.5M12 3v13.5" />
+            </svg>
+            {chooseLabel}
+          </button>
+          <p className="text-sm text-slate-500 mt-3 truncate max-w-full">{noFileLabel}</p>
+        </>
+      )}
     </div>
   );
 }
@@ -67,6 +104,9 @@ export async function action({ request }: Route.ActionArgs) {
   const tr = getTranslations(getLocaleFromRequest(request)).register;
   if (!docType) return { error: tr.errSelectDoc };
 
+  const owner = await prisma.user.findUnique({ where: { id: session.userId }, select: { phone: true } });
+  const fileKey = owner?.phone ?? session.userId;
+
   const imgAllowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
   // ID card — front + back as two separate files
@@ -77,8 +117,8 @@ export async function action({ request }: Route.ActionArgs) {
     if (!imgAllowed.includes(front.contentType) || !imgAllowed.includes(back.contentType)) {
       return { error: tr.errInvalidFileType };
     }
-    const frontUrl = await uploadToBunny(front.buffer, generateFilePath("documents/nationalId", session.userId, front.filename), front.contentType);
-    const backUrl = await uploadToBunny(back.buffer, generateFilePath("documents/nationalId", session.userId, back.filename), back.contentType);
+    const frontUrl = await uploadToBunny(front.buffer, generateFilePath("documents/nationalId", fileKey, front.filename), front.contentType);
+    const backUrl = await uploadToBunny(back.buffer, generateFilePath("documents/nationalId", fileKey, back.filename), back.contentType);
     await prisma.user.update({ where: { id: session.userId }, data: { nationalIdUrl: frontUrl, nationalIdBackUrl: backUrl } });
     return redirect("/dashboard");
   }
@@ -93,7 +133,7 @@ export async function action({ request }: Route.ActionArgs) {
     return { error: tr.errInvalidFileType };
   }
 
-  const path = generateFilePath(`documents/${docType}`, session.userId, file.filename);
+  const path = generateFilePath(`documents/${docType}`, fileKey, file.filename);
   const url = await uploadToBunny(file.buffer, path, file.contentType);
 
   const fieldMap: Record<string, string> = { passport: "passportUrl", familyDoc: "familyDocUrl" };

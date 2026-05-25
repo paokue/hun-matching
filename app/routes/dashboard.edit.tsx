@@ -1,8 +1,10 @@
-import { Form, Link, redirect } from "react-router";
+import { useEffect } from "react";
+import { Form, Link, redirect, useNavigation } from "react-router";
+import { toast } from "sonner";
 import type { Route } from "./+types/dashboard.edit";
 import { requireUser } from "~/lib/auth.server";
 import {
-  calculateAge, OCCUPATIONS, EDUCATION_LEVELS, MARITAL_STATUS,
+  calculateAge, EDUCATION_LEVELS, MARITAL_STATUS,
   TATTOO_STATUS, ETHNICITIES, RELIGIONS, LAO_PROVINCES,
 } from "~/lib/utils";
 import { Input, Select } from "~/components/ui/Input";
@@ -10,6 +12,8 @@ import { Button } from "~/components/ui/Button";
 import { Card, CardHeader, CardTitle } from "~/components/ui/Card";
 import { Navbar } from "~/components/layout/Navbar";
 import { useT } from "~/lib/i18n";
+import { getLocaleFromRequest } from "~/lib/locale.server";
+import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
 
 export function meta(_: Route.MetaArgs) {
@@ -51,15 +55,16 @@ export async function action({ request }: Route.ActionArgs) {
   const facebookUrl    = g("facebookUrl").trim();
   const tiktokUrl      = g("tiktokUrl").trim();
 
+  const tr = getTranslations(getLocaleFromRequest(request)).register;
   const errors: Record<string, string> = {};
-  if (!firstName) errors.firstName = "First name is required";
-  if (!lastName)  errors.lastName  = "Last name is required";
-  if (!dateOfBirth) errors.dateOfBirth = "Date of birth is required";
-  if (!phone) errors.phone = "Phone is required";
+  if (!firstName) errors.firstName = tr.errFirstName;
+  if (!lastName)  errors.lastName  = tr.errLastName;
+  if (!dateOfBirth) errors.dateOfBirth = tr.errDateOfBirth;
+  if (!phone) errors.phone = tr.errPhoneRequired;
   if (Object.keys(errors).length > 0) return { errors };
 
   const phoneExists = await prisma.user.findFirst({ where: { phone, NOT: { id: session.userId } } });
-  if (phoneExists) return { errors: { phone: "This phone number is already registered to another account." } };
+  if (phoneExists) return { errors: { phone: tr.errPhoneExists } };
 
   await prisma.user.update({
     where: { id: session.userId },
@@ -91,7 +96,7 @@ export async function action({ request }: Route.ActionArgs) {
     },
   });
 
-  return redirect("/dashboard");
+  return { ok: true };
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -105,10 +110,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function EditProfile({ loaderData, actionData }: Route.ComponentProps) {
   const { user } = loaderData;
-  const errors = actionData?.errors ?? {};
+  const errors: Record<string, string> = (actionData && "errors" in actionData ? actionData.errors : undefined) ?? {};
+  const navigation = useNavigation();
+  const saving = navigation.state === "submitting";
   const t = useT();
   const r = t.register;
   const dob = user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split("T")[0] : "";
+
+  useEffect(() => {
+    if (actionData && "ok" in actionData) toast.success(t.edit.savedMsg);
+  }, [actionData]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -125,8 +136,8 @@ export default function EditProfile({ loaderData, actionData }: Route.ComponentP
           {/* Personal Information */}
           <Section title={r.personalInfo}>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Input label="First Name" name="firstName" defaultValue={user.firstName ?? ""} required error={errors.firstName} />
-              <Input label="Last Name"  name="lastName"  defaultValue={user.lastName  ?? ""} required error={errors.lastName} />
+              <Input label={r.firstNameLabel} name="firstName" defaultValue={user.firstName ?? ""} required error={errors.firstName} />
+              <Input label={r.lastNameLabel}  name="lastName"  defaultValue={user.lastName  ?? ""} required error={errors.lastName} />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <Input label={r.dateOfBirthLabel} name="dateOfBirth" type="date" defaultValue={dob} required error={errors.dateOfBirth} />
@@ -142,26 +153,26 @@ export default function EditProfile({ loaderData, actionData }: Route.ComponentP
           </Section>
 
           {/* Background */}
-          <Section title="Background">
-            <Select label={r.educationLabel} name="education" placeholder={r.educationPh} options={EDUCATION_LEVELS.map((e) => ({ value: e, label: e }))} defaultValue={user.education ?? ""} />
+          <Section title={r.backgroundTitle}>
+            <Select label={r.educationLabel} name="education" placeholder={r.educationPh} options={EDUCATION_LEVELS.map((e) => ({ value: e, label: t.enums.education[e] }))} defaultValue={user.education ?? ""} />
             <div className="grid sm:grid-cols-2 gap-4">
-              <Select label={r.occupationLabel} name="occupation" placeholder={r.occupationPh} options={OCCUPATIONS.map((o) => ({ value: o, label: o }))} defaultValue={user.occupation ?? ""} />
+              <Input label={r.occupationLabel} name="occupation" placeholder={r.occupationPh} defaultValue={user.occupation ?? ""} />
               <Input label={r.familyMembersLabel} name="familyMembers" type="number" placeholder={r.familyMembersPh} min="1" max="20" defaultValue={user.familyMembers?.toString() ?? ""} />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Select label={r.maritalStatusLabel} name="maritalStatus" placeholder={r.maritalStatusPh} options={MARITAL_STATUS.map((s) => ({ value: s, label: s }))} defaultValue={user.maritalStatus ?? ""} />
-              <Select label={r.tattooStatusLabel}  name="tattooStatus"  placeholder={r.tattooStatusPh}  options={TATTOO_STATUS.map((s) => ({ value: s, label: s }))}  defaultValue={user.tattooStatus  ?? ""} />
+              <Select label={r.maritalStatusLabel} name="maritalStatus" placeholder={r.maritalStatusPh} options={MARITAL_STATUS.map((s) => ({ value: s, label: t.enums.maritalStatus[s] }))} defaultValue={user.maritalStatus ?? ""} />
+              <Select label={r.tattooStatusLabel}  name="tattooStatus"  placeholder={r.tattooStatusPh}  options={TATTOO_STATUS.map((s) => ({ value: s, label: t.enums.tattooStatus[s] }))}  defaultValue={user.tattooStatus  ?? ""} />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Select label={r.ethnicityLabel} name="ethnicity" placeholder={r.ethnicityPh} options={ETHNICITIES.map((e) => ({ value: e, label: e }))} defaultValue={user.ethnicity ?? ""} />
-              <Select label={r.religionLabel}  name="religion"  placeholder={r.religionPh}  options={RELIGIONS.map((rl) => ({ value: rl, label: rl }))} defaultValue={user.religion  ?? ""} />
+              <Select label={r.ethnicityLabel} name="ethnicity" placeholder={r.ethnicityPh} options={ETHNICITIES.map((e) => ({ value: e, label: t.enums.ethnicity[e] }))} defaultValue={user.ethnicity ?? ""} />
+              <Select label={r.religionLabel}  name="religion"  placeholder={r.religionPh}  options={RELIGIONS.map((rl) => ({ value: rl, label: t.enums.religion[rl] }))} defaultValue={user.religion  ?? ""} />
             </div>
           </Section>
 
           {/* Place of Birth */}
           <Section title={r.birthPlaceTitle}>
             <div className="grid sm:grid-cols-3 gap-4">
-              <Select label={r.provinceLabel} name="birthProvince" placeholder={r.provincePh} options={LAO_PROVINCES.map((p) => ({ value: p, label: p }))} defaultValue={user.birthProvince ?? ""} />
+              <Select label={r.provinceLabel} name="birthProvince" placeholder={r.provincePh} options={LAO_PROVINCES.map((p) => ({ value: p, label: t.enums.provinces[p] }))} defaultValue={user.birthProvince ?? ""} />
               <Input label={r.districtLabel} name="birthDistrict" placeholder={r.districtPh} defaultValue={user.birthDistrict ?? ""} />
               <Input label={r.villageLabel}  name="birthVillage"  placeholder={r.villagePh}  defaultValue={user.birthVillage  ?? ""} />
             </div>
@@ -170,14 +181,14 @@ export default function EditProfile({ loaderData, actionData }: Route.ComponentP
           {/* Current Address */}
           <Section title={r.currentAddressTitle}>
             <div className="grid sm:grid-cols-3 gap-4">
-              <Select label={r.provinceLabel} name="currentProvince" placeholder={r.provincePh} options={LAO_PROVINCES.map((p) => ({ value: p, label: p }))} defaultValue={user.currentProvince ?? ""} />
+              <Select label={r.provinceLabel} name="currentProvince" placeholder={r.provincePh} options={LAO_PROVINCES.map((p) => ({ value: p, label: t.enums.provinces[p] }))} defaultValue={user.currentProvince ?? ""} />
               <Input label={r.districtLabel} name="currentDistrict" placeholder={r.districtPh} defaultValue={user.currentDistrict ?? ""} />
               <Input label={r.villageLabel}  name="currentVillage"  placeholder={r.villagePh}  defaultValue={user.currentVillage  ?? ""} />
             </div>
           </Section>
 
           {/* Contact & Social */}
-          <Section title="Contact & Social">
+          <Section title={r.contactSocialTitle}>
             <div className="grid sm:grid-cols-2 gap-4">
               <Input label={r.primaryPhoneLabel} name="phone" type="tel" defaultValue={user.phone} required error={errors.phone} />
               <Input label={r.secondaryPhoneLabel} name="secondaryPhone" type="tel" defaultValue={user.secondaryPhone ?? ""} />
@@ -189,7 +200,7 @@ export default function EditProfile({ loaderData, actionData }: Route.ComponentP
           </Section>
 
           <div className="flex gap-3 pb-8">
-            <Button type="submit" size="lg" className="flex-1">{t.edit.saveBtn}</Button>
+            <Button type="submit" size="lg" loading={saving} className="flex-1">{t.edit.saveBtn}</Button>
             <Link to="/dashboard"><Button variant="outline" size="lg">{t.edit.cancelBtn}</Button></Link>
           </div>
         </Form>
