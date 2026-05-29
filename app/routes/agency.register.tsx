@@ -86,8 +86,8 @@ export default function AgencyRegister({ actionData }: Route.ComponentProps) {
               <div className="space-y-4">
                 <Input label={t.agencyRegister.companyNameLabel} name="companyName" placeholder={t.agencyRegister.companyNamePh} required defaultValue={values.companyName as string} error={errors.companyName} />
                 <Input label={t.agencyRegister.emailLabel} name="email" type="email" placeholder={t.agencyRegister.emailPh} required defaultValue={values.email as string} error={errors.email} />
-                <Input label={t.agencyRegister.passwordLabel} name="password" type="password" placeholder={t.agencyRegister.passwordPh} required error={errors.password} />
-                <Input label={t.agencyRegister.confirmPasswordLabel} name="confirmPassword" type="password" placeholder={t.agencyRegister.confirmPasswordPh} required error={errors.confirmPassword} />
+                <Input label={t.agencyRegister.passwordLabel} name="password" showPasswordToggle placeholder={t.agencyRegister.passwordPh} required error={errors.password} />
+                <Input label={t.agencyRegister.confirmPasswordLabel} name="confirmPassword" showPasswordToggle placeholder={t.agencyRegister.confirmPasswordPh} required error={errors.confirmPassword} />
               </div>
               <Button type="submit" variant="secondary" size="lg" loading={isSubmitting} className="w-full">
                 {isSubmitting ? t.agencyRegister.creatingAccount : t.agencyRegister.createAccount}

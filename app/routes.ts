@@ -51,6 +51,7 @@ export default [
     route("applicants", "routes/admin.applicants.tsx"),
     route("applicants/:id", "routes/admin.applicants.$id.tsx"),
     route("agencies", "routes/admin.agencies.tsx"),
+    route("agencies/:id", "routes/admin.agencies.$id.tsx"),
     route("payments", "routes/admin.payments.tsx"),
     route("packages", "routes/admin.packages.tsx"),
   ]),

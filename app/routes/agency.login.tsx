@@ -61,7 +61,7 @@ export default function AgencyLogin({ actionData }: Route.ComponentProps) {
             <Form method="post" className="space-y-4">
               {actionData?.error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{actionData.error}</div>}
               <Input label={t.agencyLogin.emailOrIdLabel} name="emailOrId" placeholder={t.agencyLogin.emailOrIdPh} required />
-              <Input label={t.agencyLogin.passwordLabel} name="password" type="password" placeholder={t.agencyLogin.passwordPh} required />
+              <Input label={t.agencyLogin.passwordLabel} name="password" showPasswordToggle placeholder={t.agencyLogin.passwordPh} required />
               <Button type="submit" variant="secondary" loading={isSubmitting} size="lg" className="w-full">
                 {isSubmitting ? t.agencyLogin.loggingIn : t.agencyLogin.loginBtn}
               </Button>

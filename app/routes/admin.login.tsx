@@ -59,13 +59,15 @@ export default function AdminLogin({ actionData }: Route.ComponentProps) {
               label="Username"
               name="username"
               placeholder="admin"
+              defaultValue="admin"
               required
             />
             <Input
               label="Password"
               name="password"
-              type="password"
+              showPasswordToggle
               placeholder="Your password"
+              defaultValue="Admin@123456"
               required
             />
             <Button type="submit" loading={isSubmitting} className="w-full" size="lg">
