@@ -14,6 +14,7 @@ import { Toaster } from "sonner";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { I18nContext } from "~/lib/i18n";
+import { GlobalProgressBar } from "~/components/ui/GlobalProgressBar";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -43,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="h-full bg-slate-50 font-sans antialiased">
+        <GlobalProgressBar />
         {children}
         <Toaster position="bottom-right" richColors />
         <ScrollRestoration />
