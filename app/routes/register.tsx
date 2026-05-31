@@ -10,6 +10,8 @@ import { buildRegCookie, getRegUserId } from "~/lib/registration.server";
 import { hashPassword, getUserFromSession } from "~/lib/auth.server";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
+import { notifyApplicantCreated } from "~/lib/pusher.server";
+import { sendAdminNewApplicantEmail } from "~/lib/mail.server";
 import { EDUCATION_LEVELS, MARITAL_STATUS, TATTOO_STATUS, ETHNICITIES, RELIGIONS } from "~/lib/utils";
 
 import { Button } from "~/components/ui/Button";
@@ -103,6 +105,11 @@ export async function action({ request }: Route.ActionArgs) {
       status: "pending",
     },
   });
+
+  await Promise.all([
+    notifyApplicantCreated({ userId: user.id, fullName: user.fullName }),
+    sendAdminNewApplicantEmail({ userId: user.id, fullName: user.fullName, profileId: user.profileId }),
+  ]);
 
   return redirect("/register/2", {
     headers: { "Set-Cookie": await buildRegCookie(user.id) },

@@ -1,6 +1,11 @@
-import { Form, NavLink, Link } from "react-router";
+import { useEffect } from "react";
+import { Form, NavLink, Link, useFetcher } from "react-router";
+import type { loader as badgesLoader } from "~/routes/admin.badges";
+import { usePusherChannel, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
 
-const NAV_LINKS = [
+type BadgeKey = "applicants" | "agencies" | "payments";
+
+const NAV_LINKS: Array<{ to: string; end?: boolean; label: string; icon: React.ReactNode; badgeKey?: BadgeKey }> = [
   {
     to: "/admin",
     end: true,
@@ -14,6 +19,7 @@ const NAV_LINKS = [
   {
     to: "/admin/applicants",
     label: "Applicants",
+    badgeKey: "applicants",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4.13a4 4 0 11-8 0 4 4 0 018 0zm6-4a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -23,6 +29,7 @@ const NAV_LINKS = [
   {
     to: "/admin/agencies",
     label: "Agencies",
+    badgeKey: "agencies",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01" />
@@ -32,6 +39,7 @@ const NAV_LINKS = [
   {
     to: "/admin/payments",
     label: "Payments",
+    badgeKey: "payments",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2zM7 15h4" />
@@ -49,7 +57,43 @@ const NAV_LINKS = [
   },
 ];
 
-function TopHeader() {
+type Badges = { applicants: number; agencies: number; payments: number };
+
+function CountBadge({ n, size = "md" }: { n: number; size?: "sm" | "md" }) {
+  if (!n || n <= 0) return null;
+  const cls = size === "sm"
+    ? "min-w-[16px] h-4 px-1 text-[10px]"
+    : "min-w-[18px] h-[18px] px-1.5 text-[11px]";
+  return (
+    <span className={`inline-flex items-center justify-center ${cls} rounded-full bg-rose-500 text-white font-bold leading-none shadow-sm`}>
+      {n > 99 ? "99+" : n}
+    </span>
+  );
+}
+
+function useAdminBadges(): Badges {
+  const fetcher = useFetcher<typeof badgesLoader>();
+
+  // Initial load
+  useEffect(() => {
+    if (fetcher.state === "idle" && !fetcher.data) fetcher.load("/admin/badges");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Live updates: refetch on any admin-channel event that can change pending counts.
+  usePusherChannel(PUSHER_CHANNELS.admin, {
+    [PUSHER_EVENTS.applicantCreated]: () => fetcher.load("/admin/badges"),
+    [PUSHER_EVENTS.applicantStatus]: () => fetcher.load("/admin/badges"),
+    [PUSHER_EVENTS.agencyCreated]: () => fetcher.load("/admin/badges"),
+    [PUSHER_EVENTS.agencyStatus]: () => fetcher.load("/admin/badges"),
+    [PUSHER_EVENTS.paymentCreated]: () => fetcher.load("/admin/badges"),
+    [PUSHER_EVENTS.paymentStatus]: () => fetcher.load("/admin/badges"),
+  });
+
+  return fetcher.data ?? { applicants: 0, agencies: 0, payments: 0 };
+}
+
+function TopHeader({ badges }: { badges: Badges }) {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
@@ -63,7 +107,7 @@ function TopHeader() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.map(({ to, end, label, icon }) => (
+          {NAV_LINKS.map(({ to, end, label, icon, badgeKey }) => (
             <NavLink
               key={to}
               to={to}
@@ -76,6 +120,7 @@ function TopHeader() {
             >
               {icon}
               <span>{label}</span>
+              {badgeKey && <CountBadge n={badges[badgeKey]} />}
             </NavLink>
           ))}
         </nav>
@@ -98,11 +143,11 @@ function TopHeader() {
   );
 }
 
-function BottomNav() {
+function BottomNav({ badges }: { badges: Badges }) {
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30 pb-[env(safe-area-inset-bottom)]">
       <div className="grid grid-cols-5">
-        {NAV_LINKS.map(({ to, end, label, icon }) => (
+        {NAV_LINKS.map(({ to, end, label, icon, badgeKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -113,7 +158,14 @@ function BottomNav() {
               }`
             }
           >
-            {icon}
+            <span className="relative">
+              {icon}
+              {badgeKey && badges[badgeKey] > 0 && (
+                <span className="absolute -top-1 -right-2">
+                  <CountBadge n={badges[badgeKey]} size="sm" />
+                </span>
+              )}
+            </span>
             <span className="leading-none">{label}</span>
           </NavLink>
         ))}
@@ -127,11 +179,12 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
+  const badges = useAdminBadges();
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopHeader />
+      <TopHeader badges={badges} />
       <main className="pb-24 md:pb-10">{children}</main>
-      <BottomNav />
+      <BottomNav badges={badges} />
     </div>
   );
 }

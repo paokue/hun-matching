@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams, useRevalidator } from "react-router";
 import { toast } from "sonner";
+import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { useT } from "~/lib/i18n";
 import type { Route } from "./+types/admin.payments";
 import { requireAdmin } from "~/lib/auth.server";
 import { addDays } from "date-fns";
@@ -11,6 +13,7 @@ import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { DropdownMenu } from "~/components/ui/DropdownMenu";
 import { formatDate } from "~/lib/utils";
 import { prisma } from "~/lib/prisma.server";
+import { notifyPaymentStatus } from "~/lib/pusher.server";
 
 const PER_OPTIONS = [20, 30, 50, 100, 500];
 const DEFAULT_PER = 20;
@@ -62,11 +65,24 @@ export async function action({ request }: Route.ActionArgs) {
       prisma.payment.update({ where: { id: paymentId }, data: { status: "verified", verifiedBy: session.userId, verifiedAt: now, membershipStartDate: now, membershipEndDate: end } }),
       prisma.agency.update({ where: { id: payment.agencyId }, data: { status: "active", membershipExpiresAt: end } }),
     ]);
+    await notifyPaymentStatus({
+      paymentId: payment.id,
+      agencyId: payment.agencyId,
+      status: "verified",
+      packageName: payment.packageName,
+      membershipExpiresAt: end,
+    });
     return { success: "Payment verified and membership activated." };
   }
 
   if (intent === "reject") {
-    await prisma.payment.update({ where: { id: paymentId }, data: { status: "rejected" } });
+    const updated = await prisma.payment.update({ where: { id: paymentId }, data: { status: "rejected" }, select: { id: true, agencyId: true, packageName: true } });
+    await notifyPaymentStatus({
+      paymentId: updated.id,
+      agencyId: updated.agencyId,
+      status: "rejected",
+      packageName: updated.packageName,
+    });
     return { success: "Payment rejected." };
   }
 
@@ -142,11 +158,29 @@ function withParams(current: URLSearchParams, updates: Record<string, string | n
 export default function AdminPayments({ loaderData, actionData }: Route.ComponentProps) {
   const { payments, total, totalPages, page, perPage, filterStatus } = loaderData;
   const [searchParams] = useSearchParams();
+  const revalidator = useRevalidator();
+  const t = useT();
 
   useEffect(() => {
     if (actionData?.success) toast.success(actionData.success);
     else if (actionData?.error) toast.error(actionData.error);
   }, [actionData]);
+
+  // Real-time updates from Pusher
+  usePusherChannel(PUSHER_CHANNELS.admin, {
+    [PUSHER_EVENTS.paymentCreated]: (data: unknown) => {
+      const p = data as { amount?: number };
+      const msg = typeof p.amount === "number"
+        ? t.realtime.newPaymentWithAmount.replace("{amount}", String(p.amount))
+        : t.realtime.newPayment;
+      toast.info(msg);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+    [PUSHER_EVENTS.paymentStatus]: () => {
+      revalidator.revalidate();
+    },
+  });
 
   const selectCls = "px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-500";
 

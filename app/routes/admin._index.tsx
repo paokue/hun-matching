@@ -14,7 +14,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const [
     totalApplicants, activeApplicants, pendingApplicants,
-    totalAgencies, activeAgencies,
+    totalAgencies, activeAgencies, pendingAgencies,
     pendingPayments, verifiedPayments,
     revenueAgg, recentApplicants, recentPayments,
   ] = await Promise.all([
@@ -23,6 +23,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     prisma.user.count({ where: { status: "pending" } }),
     prisma.agency.count(),
     prisma.agency.count({ where: { status: "active" } }),
+    prisma.agency.count({ where: { status: "pending" } }),
     prisma.payment.count({ where: { status: "pending" } }),
     prisma.payment.count({ where: { status: "verified" } }),
     prisma.payment.aggregate({ where: { status: "verified" }, _sum: { amount: true } }),
@@ -42,7 +43,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     stats: {
       totalApplicants, activeApplicants, pendingApplicants,
-      totalAgencies, activeAgencies, pendingPayments, verifiedPayments,
+      totalAgencies, activeAgencies, pendingAgencies,
+      pendingPayments, verifiedPayments,
       totalRevenue: revenueAgg._sum.amount ?? 0,
     },
     recentApplicants,
@@ -100,10 +102,10 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
   const { stats, recentApplicants, recentPayments } = loaderData;
 
   const statCards = [
-    { label: "Total Applicants", value: stats.totalApplicants, sub: `${stats.activeApplicants} active`, color: "text-rose-500", bg: "bg-rose-50", icon: ICON.users },
+    { label: "Total Applicants", value: stats.totalApplicants, sub: `${stats.activeApplicants} active`, color: "text-rose-500", bg: "bg-rose-50", icon: ICON.users, pending: stats.pendingApplicants },
     { label: "Pending Review", value: stats.pendingApplicants, sub: "need approval", color: "text-amber-500", bg: "bg-amber-50", icon: ICON.clock },
-    { label: "Total Agencies", value: stats.totalAgencies, sub: `${stats.activeAgencies} active`, color: "text-blue-500", bg: "bg-blue-50", icon: ICON.building },
-    { label: "Pending Payments", value: stats.pendingPayments, sub: "awaiting verification", color: "text-orange-500", bg: "bg-orange-50", icon: ICON.card },
+    { label: "Total Agencies", value: stats.totalAgencies, sub: `${stats.activeAgencies} active`, color: "text-blue-500", bg: "bg-blue-50", icon: ICON.building, pending: stats.pendingAgencies },
+    { label: "Pending Payments", value: stats.pendingPayments, sub: "awaiting verification", color: "text-orange-500", bg: "bg-orange-50", icon: ICON.card, pending: stats.pendingPayments },
     { label: "Verified Payments", value: stats.verifiedPayments, sub: "total transactions", color: "text-emerald-500", bg: "bg-emerald-50", icon: ICON.check },
     { label: "Total Revenue", value: `$${stats.totalRevenue.toLocaleString()}`, sub: "from memberships", color: "text-indigo-500", bg: "bg-indigo-50", icon: ICON.cash },
   ];
@@ -121,18 +123,30 @@ export default function AdminIndex({ loaderData }: Route.ComponentProps) {
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-6">Dashboard</h1>
 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
-          {statCards.map((s) => (
-            <Card key={s.label}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs text-slate-500 mb-1 truncate">{s.label}</p>
-                  <p className={`text-xl sm:text-2xl font-extrabold ${s.color}`}>{s.value}</p>
-                  <p className="text-xs text-slate-400 mt-0.5 truncate">{s.sub}</p>
+          {statCards.map((s) => {
+            const showPending = typeof s.pending === "number" && s.pending > 0;
+            return (
+              <Card key={s.label}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-500 mb-1 truncate">{s.label}</p>
+                    <p className={`text-xl sm:text-2xl font-extrabold ${s.color}`}>{s.value}</p>
+                    <p className="text-xs text-slate-400 mt-0.5 truncate">{s.sub}</p>
+                  </div>
+                  {showPending ? (
+                    <span
+                      title={`${s.pending} pending`}
+                      className="min-w-[36px] h-9 px-2 rounded-lg bg-rose-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0 shadow-sm shadow-rose-200"
+                    >
+                      {s.pending! > 99 ? "99+" : s.pending}
+                    </span>
+                  ) : (
+                    <div className={`w-9 h-9 rounded-lg ${s.bg} ${s.color} flex items-center justify-center flex-shrink-0`}>{s.icon}</div>
+                  )}
                 </div>
-                <div className={`w-9 h-9 rounded-lg ${s.bg} ${s.color} flex items-center justify-center flex-shrink-0`}>{s.icon}</div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">

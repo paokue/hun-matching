@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link, redirect, Form, useFetcher, useNavigate, useSearchParams } from "react-router";
+import { Link, redirect, Form, useFetcher, useNavigate, useSearchParams, useRevalidator } from "react-router";
 import { toast } from "sonner";
+import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
 import { SELECTED_POOL } from "~/lib/selectedPool";
 import type { Route } from "./+types/agency.dashboard";
 import { requireAgency } from "~/lib/auth.server";
@@ -164,6 +165,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
   const confirmFetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
 
   // Toast after a successful registration redirect (?registered=1)
   useEffect(() => {
@@ -172,6 +174,26 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
       setSearchParams((p) => { p.delete("registered"); return p; }, { replace: true });
     }
   }, [searchParams]);
+
+  // Real-time updates from Pusher for this specific agency
+  usePusherChannel(PUSHER_CHANNELS.agency(agency.id), {
+    [PUSHER_EVENTS.agencyStatus]: (data: unknown) => {
+      const p = data as { status: string };
+      if (p.status === "active") toast.success(t.realtime.agencyApproved);
+      else if (p.status === "rejected") toast.error(t.realtime.agencyRejected);
+      else if (p.status === "suspended") toast.error(t.realtime.agencySuspended);
+      playNotifySound();
+      // Re-runs loader; AgencyGate will swap to the live dashboard once status === "active".
+      revalidator.revalidate();
+    },
+    [PUSHER_EVENTS.paymentStatus]: (data: unknown) => {
+      const p = data as { status: string };
+      if (p.status === "verified") toast.success(t.realtime.paymentApproved);
+      else if (p.status === "rejected") toast.error(t.realtime.paymentRejected);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+  });
 
   const [activeTab, setActiveTab] = useState<"new" | "selected">("new");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -189,10 +211,10 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-        toast.success(`${name} unmarked as contacted.`);
+        toast.success(t.agencyDashboard.uncontactedToast.replace("{name}", name));
       } else {
         next.add(id);
-        toast.success(`${name} marked as contacted.`);
+        toast.success(t.agencyDashboard.contactedToast.replace("{name}", name));
       }
       return next;
     });
@@ -203,7 +225,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     if (confirmFetcher.state !== "idle" || !confirmFetcher.data) return;
     const n = confirmFetcher.data.confirmed;
-    toast.success(`${n} applicant${n !== 1 ? "s" : ""} confirmed successfully!`);
+    toast.success(t.agencyDashboard.confirmedToast.replace("{n}", String(n)));
     setCheckedIds(new Set());
   }, [confirmFetcher.state, confirmFetcher.data]);
   const [filters, setFilters] = useState({
@@ -224,6 +246,41 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
 
   function setFilter(key: keyof typeof filters, value: string) {
     setFilters((f) => ({ ...f, [key]: value }));
+  }
+
+  function exportSelectedCsv() {
+    const d = t.agencyDashboard;
+    const headers = [
+      d.csvNumber, d.csvProfileId, d.csvName, d.csvAge, d.csvHeight, d.csvWeight,
+      d.csvOccupation, d.csvEducation, d.csvFamilyMembers, d.csvMaritalStatus, d.csvTattoo,
+      d.csvEthnicity, d.csvReligion,
+      d.csvBirthPlace, d.csvCurrentAddress,
+      d.csvPhone, d.csvSecondaryPhone, d.csvFacebook, d.csvTiktok,
+      d.csvExpires,
+    ];
+    const escapeCsv = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = SELECTED_POOL.map((p, i) => [
+      i + 1, p.profileId, p.name, p.age, p.height, p.weight,
+      p.occupation, p.education, p.familyMembers, p.maritalStatus, p.tattooStatus,
+      p.ethnicity, p.religion,
+      [p.birthVillage, p.birthDistrict, p.birthProvince].filter(Boolean).join(", "),
+      [p.currentVillage, p.currentDistrict, p.currentProvince].filter(Boolean).join(", "),
+      p.phone, p.secondaryPhone, p.facebookUrl, p.tiktokUrl,
+      p.expiresAt,
+    ]);
+    const csv = "﻿" + [headers, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `selected-applicants-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(t.agencyDashboard.exportedToast.replace("{n}", String(rows.length)));
   }
 
   function clearFilters() {
@@ -352,17 +409,17 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
             {/* ── Applicants section with tabs ── */}
             <section>
               <Tabs defaultValue="new" onValueChange={(v) => setActiveTab(v as "new" | "selected")}>
-                {/* Tabs + search + filter — one line */}
-                <div className="flex flex-column sm:flex-row items-center justify-between mb-6">
-                  <TabsList>
-                    <TabsTrigger value="new">
-                      New Applicants
+                {/* Tabs + search + filter — stacks on mobile, inline on sm+ */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                  <TabsList className="w-full sm:w-auto border border-slate-200">
+                    <TabsTrigger value="new" className="flex-1 sm:flex-none">
+                      {t.agencyDashboard.tabNew}
                       <span className="ml-1 inline-flex items-center justify-center rounded-full bg-white/30 px-1.5 py-0.5 text-xs font-semibold">
                         {filteredPool.length}
                       </span>
                     </TabsTrigger>
-                    <TabsTrigger value="selected">
-                      Selected
+                    <TabsTrigger value="selected" className="flex-1 sm:flex-none">
+                      {t.agencyDashboard.tabSelected}
                       {SELECTED_POOL.length > 0 && (
                         <span className="ml-1 inline-flex items-center justify-center rounded-full bg-white/30 px-1.5 py-0.5 text-xs font-semibold">
                           {SELECTED_POOL.length}
@@ -371,27 +428,40 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                     </TabsTrigger>
                   </TabsList>
 
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-44">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none sm:w-44">
                       <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                       </svg>
                       <input
                         type="text"
-                        placeholder="Search..."
+                        placeholder={t.agencyDashboard.searchPh}
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 transition-colors"
+                        className="w-full pl-8 pr-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400 transition-colors"
                       />
                     </div>
+                    {activeTab === "selected" && (
+                      <button
+                        onClick={exportSelectedCsv}
+                        disabled={SELECTED_POOL.length === 0}
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:border-emerald-300 hover:text-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={t.agencyDashboard.exportCsvTooltip}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+                        </svg>
+                        <span className="hidden sm:inline">{t.agencyDashboard.exportCsv}</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => setFilterOpen(true)}
-                      className={`relative inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${activeFilterCount > 0 ? "bg-rose-500 border-rose-500 text-white shadow-md shadow-rose-200" : "bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-500"}`}
+                      className={`shrink-0 relative inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${activeFilterCount > 0 ? "bg-rose-500 border-rose-500 text-white shadow-md shadow-rose-200" : "bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-500"}`}
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
                       </svg>
-                      Filters
+                      {t.agencyDashboard.filtersBtn}
                       {activeFilterCount > 0 && (
                         <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-rose-500 text-xs font-bold flex items-center justify-center shadow">
                           {activeFilterCount}
@@ -427,7 +497,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                 {/* Name + age — always on, bottom-left */}
                                 <div className="absolute bottom-0 left-0 p-3 pointer-events-none">
                                   <p className="text-white font-bold text-sm leading-tight drop-shadow">{p.name}</p>
-                                  <p className="text-white/80 text-xs mt-0.5 drop-shadow">{p.age} yrs</p>
+                                  <p className="text-white/80 text-xs mt-0.5 drop-shadow">{p.age} {t.agencyDashboard.yrs}</p>
                                 </div>
 
                                 {/* Checkbox — members only, top-right */}
@@ -436,7 +506,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                     onClick={(e) => toggleCheck(p.id, e)}
                                     className={`cursor-pointer absolute top-2 right-2 w-6 h-6 rounded-sm border-2 flex items-center justify-center transition-all duration-200 shadow-md ${isChecked
                                       ? "bg-rose-500 border-rose-500 opacity-100"
-                                      : "bg-white/80 border-white/60 opacity-0 group-hover:opacity-100 hover:border-rose-400"
+                                      : "bg-white/80 border-rose-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:border-rose-400"
                                       }`}
                                   >
                                     {isChecked && (
@@ -463,9 +533,9 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                           </svg>
-                          Load More
+                          {t.agencyDashboard.loadMore}
                           <span className="text-xs text-slate-400 font-normal">
-                            ({filteredPool.length - visibleCount} remaining)
+                            ({filteredPool.length - visibleCount} {t.agencyDashboard.remaining})
                           </span>
                         </button>
                       </div>
@@ -483,8 +553,8 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                           </svg>
                         </div>
-                        <p className="text-slate-600 font-semibold">No selected applicants yet</p>
-                        <p className="text-slate-400 text-sm mt-1">Browse the New Applicants tab to start selecting.</p>
+                        <p className="text-slate-600 font-semibold">{t.agencyDashboard.emptySelectedTitle}</p>
+                        <p className="text-slate-400 text-sm mt-1">{t.agencyDashboard.emptySelectedDesc}</p>
                       </div>
                     ) : (
                       <>
@@ -498,7 +568,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                             </svg>
-                            Grid
+                            {t.agencyDashboard.viewGrid}
                           </button>
                           <button
                             onClick={() => setSelectedView("list")}
@@ -507,7 +577,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
-                            List
+                            {t.agencyDashboard.viewList}
                           </button>
                         </div>
                       </div>
@@ -533,7 +603,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent pointer-events-none" />
                                     <div className="absolute bottom-0 left-0 p-3 pointer-events-none">
                                       <p className="text-white font-bold text-sm leading-tight drop-shadow">{sel.name}</p>
-                                      <p className="text-white/80 text-xs mt-0.5 drop-shadow">{sel.age} yrs</p>
+                                      <p className="text-white/80 text-xs mt-0.5 drop-shadow">{sel.age} {t.agencyDashboard.yrs}</p>
                                     </div>
                                     {/* Status badge */}
                                     <div className="absolute top-2 left-2">
@@ -542,7 +612,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                           </svg>
-                                          Contacted
+                                          {t.agencyDashboard.contacted}
                                         </span>
                                       ) : (
                                         <span className="inline-flex items-center gap-1 bg-rose-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold shadow-md">
@@ -578,7 +648,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                             </svg>
-                                            View detail
+                                            {t.agencyDashboard.viewDetail}
                                           </Link>
                                           <button
                                             onClick={() => toggleContacted(sel.id, sel.name)}
@@ -587,7 +657,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                             <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
-                                            {isContacted ? "Unmark contact" : "Mark as contact"}
+                                            {isContacted ? t.agencyDashboard.unmarkContact : t.agencyDashboard.markContact}
                                           </button>
                                         </div>
                                       )}
@@ -603,12 +673,12 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                <th className="px-4 py-3">Applicant</th>
-                                <th className="px-4 py-3">Age</th>
-                                <th className="px-4 py-3 hidden sm:table-cell">Occupation</th>
-                                <th className="px-4 py-3 hidden md:table-cell">Location</th>
-                                <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3 text-right">Actions</th>
+                                <th className="px-4 py-3">{t.agencyDashboard.thApplicant}</th>
+                                <th className="px-4 py-3">{t.agencyDashboard.thAge}</th>
+                                <th className="px-4 py-3 hidden sm:table-cell">{t.agencyDashboard.thOccupation}</th>
+                                <th className="px-4 py-3 hidden md:table-cell">{t.agencyDashboard.thLocation}</th>
+                                <th className="px-4 py-3">{t.agencyDashboard.thStatus}</th>
+                                <th className="px-4 py-3 text-right">{t.agencyDashboard.thActions}</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -629,7 +699,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{sel.age} yrs</td>
+                                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{sel.age} {t.agencyDashboard.yrs}</td>
                                     <td className="px-4 py-3 text-slate-600 hidden sm:table-cell">{sel.occupation}</td>
                                     <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{sel.currentProvince}</td>
                                     <td className="px-4 py-3">
@@ -638,7 +708,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                           </svg>
-                                          Contacted
+                                          {t.agencyDashboard.contacted}
                                         </span>
                                       ) : (
                                         <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-600 text-xs px-2 py-1 rounded-full font-semibold whitespace-nowrap">
@@ -653,7 +723,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                       <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                         <Link
                                           to={`/agency/applicant/${sel.id}`}
-                                          title="View detail"
+                                          title={t.agencyDashboard.viewDetail}
                                           className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:border-rose-300 hover:text-rose-500 transition-colors"
                                         >
                                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -663,7 +733,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                                         </Link>
                                         <button
                                           onClick={() => toggleContacted(sel.id, sel.name)}
-                                          title={isContacted ? "Unmark contact" : "Mark as contact"}
+                                          title={isContacted ? t.agencyDashboard.unmarkContact : t.agencyDashboard.markContact}
                                           className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${isContacted ? "border-emerald-300 text-emerald-500 bg-emerald-50" : "border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-500"}`}
                                         >
                                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -705,7 +775,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
             <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
             </svg>
-            <h2 className="font-semibold text-slate-900">Filters</h2>
+            <h2 className="font-semibold text-slate-900">{t.agencyFilters.title}</h2>
             {activeFilterCount > 0 && (
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 text-rose-600 text-xs font-bold">{activeFilterCount}</span>
             )}
@@ -721,72 +791,72 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Age (years)</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.age}</p>
             <div className="flex gap-2">
-              <input type="number" placeholder="Min age" value={filters.minAge} onChange={(e) => setFilter("minAge", e.target.value)} min={18} max={60} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
-              <input type="number" placeholder="Max age" value={filters.maxAge} onChange={(e) => setFilter("maxAge", e.target.value)} min={18} max={60} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+              <input type="number" placeholder={t.agencyFilters.minAge} value={filters.minAge} onChange={(e) => setFilter("minAge", e.target.value)} min={18} max={60} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+              <input type="number" placeholder={t.agencyFilters.maxAge} value={filters.maxAge} onChange={(e) => setFilter("maxAge", e.target.value)} min={18} max={60} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Height (cm)</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.height}</p>
             <div className="flex gap-2">
-              <input type="number" placeholder="Min height" value={filters.minHeight} onChange={(e) => setFilter("minHeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
-              <input type="number" placeholder="Max height" value={filters.maxHeight} onChange={(e) => setFilter("maxHeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+              <input type="number" placeholder={t.agencyFilters.minHeight} value={filters.minHeight} onChange={(e) => setFilter("minHeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+              <input type="number" placeholder={t.agencyFilters.maxHeight} value={filters.maxHeight} onChange={(e) => setFilter("maxHeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Weight (kg)</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.weight}</p>
             <div className="flex gap-2">
-              <input type="number" placeholder="Min weight" value={filters.minWeight} onChange={(e) => setFilter("minWeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
-              <input type="number" placeholder="Max weight" value={filters.maxWeight} onChange={(e) => setFilter("maxWeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+              <input type="number" placeholder={t.agencyFilters.minWeight} value={filters.minWeight} onChange={(e) => setFilter("minWeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+              <input type="number" placeholder={t.agencyFilters.maxWeight} value={filters.maxWeight} onChange={(e) => setFilter("maxWeight", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Occupation</p>
-            <select value={filters.occupation} onChange={(e) => setFilter("occupation", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
-              <option value="">Any occupation</option>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.occupation}</p>
+            <select value={filters.occupation} onChange={(e) => setFilter("occupation", e.target.value)} className="w-full px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
+              <option value="">{t.agencyFilters.anyOccupation}</option>
               {OCCUPATIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Marital Status</p>
-            <select value={filters.maritalStatus} onChange={(e) => setFilter("maritalStatus", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
-              <option value="">Any marital status</option>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.maritalStatus}</p>
+            <select value={filters.maritalStatus} onChange={(e) => setFilter("maritalStatus", e.target.value)} className="w-full px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
+              <option value="">{t.agencyFilters.anyMaritalStatus}</option>
               {MARITAL_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tattoo</p>
-            <select value={filters.tattooStatus} onChange={(e) => setFilter("tattooStatus", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
-              <option value="">Any tattoo status</option>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.tattoo}</p>
+            <select value={filters.tattooStatus} onChange={(e) => setFilter("tattooStatus", e.target.value)} className="w-full px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
+              <option value="">{t.agencyFilters.anyTattoo}</option>
               {TATTOO_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Ethnicity</p>
-            <select value={filters.ethnicity} onChange={(e) => setFilter("ethnicity", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
-              <option value="">Any ethnicity</option>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.ethnicity}</p>
+            <select value={filters.ethnicity} onChange={(e) => setFilter("ethnicity", e.target.value)} className="w-full px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
+              <option value="">{t.agencyFilters.anyEthnicity}</option>
               {ETHNICITIES.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Religion</p>
-            <select value={filters.religion} onChange={(e) => setFilter("religion", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
-              <option value="">Any religion</option>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.religion}</p>
+            <select value={filters.religion} onChange={(e) => setFilter("religion", e.target.value)} className="w-full px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300">
+              <option value="">{t.agencyFilters.anyReligion}</option>
               {RELIGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Location</p>
-            <input type="text" placeholder="City or province..." value={filters.location} onChange={(e) => setFilter("location", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t.agencyFilters.location}</p>
+            <input type="text" placeholder={t.agencyFilters.locationPh} value={filters.location} onChange={(e) => setFilter("location", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 placeholder:text-slate-400" />
           </div>
 
         </div>
@@ -794,10 +864,10 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
         {/* Footer actions */}
         <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
           <button onClick={clearFilters} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-            Clear All
+            {t.agencyFilters.clearAll}
           </button>
           <button onClick={() => setFilterOpen(false)} className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition-colors shadow-md shadow-rose-200">
-            Apply
+            {t.agencyFilters.apply}
           </button>
         </div>
       </div>
@@ -818,7 +888,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent rounded-2xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 p-5">
               <p className="text-white font-bold text-xl drop-shadow">{previewProfile.name}</p>
-              <p className="text-white/80 text-sm mt-0.5 drop-shadow">{previewProfile.age} yrs</p>
+              <p className="text-white/80 text-sm mt-0.5 drop-shadow">{previewProfile.age} {t.agencyDashboard.yrs}</p>
             </div>
             {/* Close */}
             <button
@@ -851,14 +921,14 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Confirming…
+                  {t.agencyDashboard.confirming}
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
-                  Confirm Selected
+                  {t.agencyDashboard.confirmSelected}
                   <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/25 text-xs font-bold">
                     {checkedIds.size}
                   </span>

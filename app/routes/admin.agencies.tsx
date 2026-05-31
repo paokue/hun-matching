@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Form, Link, useSearchParams } from "react-router";
+import { Form, Link, useSearchParams, useRevalidator } from "react-router";
 import { toast } from "sonner";
+import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { useT } from "~/lib/i18n";
 import type { Route } from "./+types/admin.agencies";
 import { requireAdmin } from "~/lib/auth.server";
 import { AdminLayout } from "~/components/layout/AdminLayout";
@@ -11,6 +13,7 @@ import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { DropdownMenu } from "~/components/ui/DropdownMenu";
 import { formatDate } from "~/lib/utils";
 import { prisma } from "~/lib/prisma.server";
+import { notifyAgencyStatus } from "~/lib/pusher.server";
 
 const PER_OPTIONS = [20, 30, 50, 100, 500];
 const DEFAULT_PER = 20;
@@ -68,9 +71,21 @@ export async function action({ request }: Route.ActionArgs) {
   const intent = formData.get("intent") as string;
   const agencyId = formData.get("agencyId") as string;
 
-  if (intent === "verify") { await prisma.agency.update({ where: { id: agencyId }, data: { isVerified: true, status: "active" } }); return { success: "Agency verified." }; }
-  if (intent === "suspend") { await prisma.agency.update({ where: { id: agencyId }, data: { status: "suspended" } }); return { success: "Agency suspended." }; }
-  if (intent === "activate") { await prisma.agency.update({ where: { id: agencyId }, data: { status: "active" } }); return { success: "Agency activated." }; }
+  if (intent === "verify") {
+    const a = await prisma.agency.update({ where: { id: agencyId }, data: { isVerified: true, status: "active" }, select: { id: true, companyName: true, status: true, isVerified: true } });
+    await notifyAgencyStatus({ agencyId: a.id, status: a.status, companyName: a.companyName, isVerified: a.isVerified });
+    return { success: "Agency verified." };
+  }
+  if (intent === "suspend") {
+    const a = await prisma.agency.update({ where: { id: agencyId }, data: { status: "suspended" }, select: { id: true, companyName: true, status: true, isVerified: true } });
+    await notifyAgencyStatus({ agencyId: a.id, status: a.status, companyName: a.companyName, isVerified: a.isVerified });
+    return { success: "Agency suspended." };
+  }
+  if (intent === "activate") {
+    const a = await prisma.agency.update({ where: { id: agencyId }, data: { status: "active" }, select: { id: true, companyName: true, status: true, isVerified: true } });
+    await notifyAgencyStatus({ agencyId: a.id, status: a.status, companyName: a.companyName, isVerified: a.isVerified });
+    return { success: "Agency activated." };
+  }
   if (intent === "delete") { await prisma.agency.delete({ where: { id: agencyId } }); return { success: "Agency deleted." }; }
 
   return { error: "Unknown action." };
@@ -163,11 +178,29 @@ function currentPackage(a: Row) {
 export default function AdminAgencies({ loaderData, actionData }: Route.ComponentProps) {
   const { agencies, total, totalPages, page, perPage } = loaderData;
   const [searchParams] = useSearchParams();
+  const revalidator = useRevalidator();
+  const t = useT();
 
   useEffect(() => {
     if (actionData?.success) toast.success(actionData.success);
     else if (actionData?.error) toast.error(actionData.error);
   }, [actionData]);
+
+  // Real-time updates from Pusher
+  usePusherChannel(PUSHER_CHANNELS.admin, {
+    [PUSHER_EVENTS.agencyCreated]: (data: unknown) => {
+      const p = data as { companyName?: string | null };
+      const msg = p.companyName
+        ? t.realtime.newAgencyWithName.replace("{name}", p.companyName)
+        : t.realtime.newAgency;
+      toast.info(msg);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+    [PUSHER_EVENTS.agencyStatus]: () => {
+      revalidator.revalidate();
+    },
+  });
 
   const hasFilters = !!(searchParams.get("search") || searchParams.get("status"));
   const selectCls = "px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-500";

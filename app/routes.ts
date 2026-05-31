@@ -46,6 +46,7 @@ export default [
   // Admin
   ...prefix("admin", [
     index("routes/admin._index.tsx"),
+    route("badges", "routes/admin.badges.tsx"),
     route("login", "routes/admin.login.tsx"),
     route("logout", "routes/admin.logout.tsx"),
     route("applicants", "routes/admin.applicants.tsx"),

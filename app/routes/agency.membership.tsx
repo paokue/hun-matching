@@ -13,6 +13,8 @@ import { useT } from "~/lib/i18n";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
+import { notifyPaymentCreated } from "~/lib/pusher.server";
+import { sendAdminNewPaymentEmail } from "~/lib/mail.server";
 
 type Pkg = { id: string; name: string; description: string | null; price: number; durationDays: number; features: string[] };
 
@@ -65,7 +67,7 @@ export async function action({ request }: Route.ActionArgs) {
   const path = generateFilePath("receipts", agency?.agencyId ?? session.userId, receiptFile.filename);
   const receiptUrl = await uploadToBunny(receiptFile.buffer, path, receiptFile.contentType);
 
-  await prisma.payment.create({
+  const payment = await prisma.payment.create({
     data: {
       agencyId: session.userId,
       packageId,
@@ -77,6 +79,26 @@ export async function action({ request }: Route.ActionArgs) {
       status: "pending",
     },
   });
+
+  const agencyInfo = await prisma.agency.findUnique({
+    where: { id: session.userId },
+    select: { companyName: true },
+  });
+  await Promise.all([
+    notifyPaymentCreated({
+      paymentId: payment.id,
+      agencyId: session.userId,
+      amount: pkg.price,
+      packageName: pkg.name,
+    }),
+    sendAdminNewPaymentEmail({
+      paymentId: payment.id,
+      agencyId: session.userId,
+      amount: pkg.price,
+      packageName: pkg.name,
+      companyName: agencyInfo?.companyName,
+    }),
+  ]);
 
   return { success: tr.submitSuccess };
 }

@@ -10,6 +10,8 @@ import { useT } from "~/lib/i18n";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
+import { notifyAgencyCreated } from "~/lib/pusher.server";
+import { sendAdminNewAgencyEmail } from "~/lib/mail.server";
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "Agency Registration — HanMatching.com" }];
@@ -60,6 +62,11 @@ export async function action({ request }: Route.ActionArgs) {
       isVerified: false,
     },
   });
+
+  await Promise.all([
+    notifyAgencyCreated({ agencyId: agency.id, companyName: agency.companyName }),
+    sendAdminNewAgencyEmail({ agencyId: agency.id, companyName: agency.companyName, email: agency.email }),
+  ]);
 
   return createUserSession(agency.id, "agency", "/agency/dashboard?registered=1");
 }

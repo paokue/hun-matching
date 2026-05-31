@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Form, Link, useSearchParams } from "react-router";
+import { Form, Link, useSearchParams, useRevalidator } from "react-router";
 import { toast } from "sonner";
+import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { useT } from "~/lib/i18n";
 import type { Route } from "./+types/admin.applicants";
 import { requireAdmin } from "~/lib/auth.server";
 import { AdminLayout } from "~/components/layout/AdminLayout";
@@ -11,6 +13,7 @@ import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { DropdownMenu } from "~/components/ui/DropdownMenu";
 import { formatDate, ETHNICITIES } from "~/lib/utils";
 import { prisma } from "~/lib/prisma.server";
+import { notifyApplicantStatus } from "~/lib/pusher.server";
 
 const PER_OPTIONS = [20, 30, 50, 100, 500];
 const DEFAULT_PER = 20;
@@ -63,9 +66,21 @@ export async function action({ request }: Route.ActionArgs) {
   const intent = formData.get("intent") as string;
   const userId = formData.get("userId") as string;
 
-  if (intent === "approve") { await prisma.user.update({ where: { id: userId }, data: { status: "active", isProfileComplete: true } }); return { success: "Profile approved." }; }
-  if (intent === "reject") { await prisma.user.update({ where: { id: userId }, data: { status: "rejected" } }); return { success: "Profile rejected." }; }
-  if (intent === "suspend") { await prisma.user.update({ where: { id: userId }, data: { status: "suspended" } }); return { success: "User suspended." }; }
+  if (intent === "approve") {
+    const u = await prisma.user.update({ where: { id: userId }, data: { status: "active", isProfileComplete: true }, select: { id: true, fullName: true, status: true } });
+    await notifyApplicantStatus({ userId: u.id, status: u.status, fullName: u.fullName });
+    return { success: "Profile approved." };
+  }
+  if (intent === "reject") {
+    const u = await prisma.user.update({ where: { id: userId }, data: { status: "rejected" }, select: { id: true, fullName: true, status: true } });
+    await notifyApplicantStatus({ userId: u.id, status: u.status, fullName: u.fullName });
+    return { success: "Profile rejected." };
+  }
+  if (intent === "suspend") {
+    const u = await prisma.user.update({ where: { id: userId }, data: { status: "suspended" }, select: { id: true, fullName: true, status: true } });
+    await notifyApplicantStatus({ userId: u.id, status: u.status, fullName: u.fullName });
+    return { success: "User suspended." };
+  }
   if (intent === "delete") { await prisma.user.delete({ where: { id: userId } }); return { success: "User deleted." }; }
 
   return { error: "Unknown action." };
@@ -162,12 +177,30 @@ function withParams(current: URLSearchParams, updates: Record<string, string | n
 export default function AdminApplicants({ loaderData, actionData }: Route.ComponentProps) {
   const { users, total, totalPages, page, perPage } = loaderData;
   const [searchParams] = useSearchParams();
+  const revalidator = useRevalidator();
+  const t = useT();
 
   // Show success/error as toast (action runs via Form inside confirm modals)
   useEffect(() => {
     if (actionData?.success) toast.success(actionData.success);
     else if (actionData?.error) toast.error(actionData.error);
   }, [actionData]);
+
+  // Real-time updates from Pusher
+  usePusherChannel(PUSHER_CHANNELS.admin, {
+    [PUSHER_EVENTS.applicantCreated]: (data: unknown) => {
+      const p = data as { fullName?: string | null };
+      const msg = p.fullName
+        ? t.realtime.newApplicantWithName.replace("{name}", p.fullName)
+        : t.realtime.newApplicant;
+      toast.info(msg);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+    [PUSHER_EVENTS.applicantStatus]: () => {
+      revalidator.revalidate();
+    },
+  });
 
   const hasFilters = !!(searchParams.get("search") || searchParams.get("status") || searchParams.get("ethnicity"));
 
