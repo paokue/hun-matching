@@ -1,7 +1,9 @@
 import { useEffect } from "react";
-import { Form, NavLink, Link, useFetcher } from "react-router";
+import { Form, NavLink, Link, useFetcher, useRevalidator } from "react-router";
+import { toast } from "sonner";
 import type { loader as badgesLoader } from "~/routes/admin.badges";
-import { usePusherChannel, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { useT } from "~/lib/i18n";
 
 type BadgeKey = "applicants" | "agencies" | "payments";
 
@@ -73,6 +75,8 @@ function CountBadge({ n, size = "md" }: { n: number; size?: "sm" | "md" }) {
 
 function useAdminBadges(): Badges {
   const fetcher = useFetcher<typeof badgesLoader>();
+  const revalidator = useRevalidator();
+  const t = useT();
 
   // Initial load
   useEffect(() => {
@@ -80,14 +84,44 @@ function useAdminBadges(): Badges {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Live updates: refetch on any admin-channel event that can change pending counts.
+  // Shared refresh: badges + the currently-displayed page's loader.
+  const refresh = () => {
+    fetcher.load("/admin/badges");
+    revalidator.revalidate();
+  };
+
+  // Live updates: toast + sound on *Created events, silent refresh on *Status events.
   usePusherChannel(PUSHER_CHANNELS.admin, {
-    [PUSHER_EVENTS.applicantCreated]: () => fetcher.load("/admin/badges"),
-    [PUSHER_EVENTS.applicantStatus]: () => fetcher.load("/admin/badges"),
-    [PUSHER_EVENTS.agencyCreated]: () => fetcher.load("/admin/badges"),
-    [PUSHER_EVENTS.agencyStatus]: () => fetcher.load("/admin/badges"),
-    [PUSHER_EVENTS.paymentCreated]: () => fetcher.load("/admin/badges"),
-    [PUSHER_EVENTS.paymentStatus]: () => fetcher.load("/admin/badges"),
+    [PUSHER_EVENTS.applicantCreated]: (data: unknown) => {
+      const p = data as { fullName?: string | null };
+      const msg = p.fullName
+        ? t.realtime.newApplicantWithName.replace("{name}", p.fullName)
+        : t.realtime.newApplicant;
+      toast.info(msg);
+      playNotifySound();
+      refresh();
+    },
+    [PUSHER_EVENTS.applicantStatus]: () => refresh(),
+    [PUSHER_EVENTS.agencyCreated]: (data: unknown) => {
+      const p = data as { companyName?: string | null };
+      const msg = p.companyName
+        ? t.realtime.newAgencyWithName.replace("{name}", p.companyName)
+        : t.realtime.newAgency;
+      toast.info(msg);
+      playNotifySound();
+      refresh();
+    },
+    [PUSHER_EVENTS.agencyStatus]: () => refresh(),
+    [PUSHER_EVENTS.paymentCreated]: (data: unknown) => {
+      const p = data as { amount?: number };
+      const msg = typeof p.amount === "number"
+        ? t.realtime.newPaymentWithAmount.replace("{amount}", String(p.amount))
+        : t.realtime.newPayment;
+      toast.info(msg);
+      playNotifySound();
+      refresh();
+    },
+    [PUSHER_EVENTS.paymentStatus]: () => refresh(),
   });
 
   return fetcher.data ?? { applicants: 0, agencies: 0, payments: 0 };

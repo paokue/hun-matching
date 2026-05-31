@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/Button";
 import { Badge } from "~/components/ui/Badge";
 import { formatDate } from "~/lib/utils";
 import { useT } from "~/lib/i18n";
+import { useAgencyRealtime } from "~/lib/pusher.realtime";
 import { prisma } from "~/lib/prisma.server";
 import { addMonths } from "date-fns";
 
@@ -57,6 +58,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 export default function AgencyProfileView({ loaderData, actionData }: Route.ComponentProps) {
   const { profile, agency, isSelected, selectionExpiry } = loaderData;
   const t = useT();
+  useAgencyRealtime(agency.id);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">

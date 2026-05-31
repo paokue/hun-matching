@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "~/components/ui/Ca
 import { ImageLightbox } from "~/components/ui/ImageLightbox";
 import { Navbar } from "~/components/layout/Navbar";
 import { useT } from "~/lib/i18n";
+import { useApplicantRealtime } from "~/lib/pusher.realtime";
 import { prisma } from "~/lib/prisma.server";
 
 const MAX_IMAGES = 10;
@@ -79,6 +80,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Photos({ loaderData, actionData }: Route.ComponentProps) {
   const { user } = loaderData;
+  useApplicantRealtime(user.id);
   const navigation = useNavigation();
   const galleryFetcher = useFetcher<typeof action>();
   const busyIntent = navigation.state !== "idle" ? (navigation.formData?.get("intent") as string | null) : null;

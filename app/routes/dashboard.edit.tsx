@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/Button";
 import { Card, CardHeader, CardTitle } from "~/components/ui/Card";
 import { Navbar } from "~/components/layout/Navbar";
 import { useT } from "~/lib/i18n";
+import { useApplicantRealtime } from "~/lib/pusher.realtime";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
@@ -110,6 +111,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function EditProfile({ loaderData, actionData }: Route.ComponentProps) {
   const { user } = loaderData;
+  useApplicantRealtime(user.id);
   const errors: Record<string, string> = (actionData && "errors" in actionData ? actionData.errors : undefined) ?? {};
   const navigation = useNavigation();
   const saving = navigation.state === "submitting";

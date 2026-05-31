@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
-import { Form, Link, useSearchParams, useRevalidator } from "react-router";
+import { Form, Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
-import { useT } from "~/lib/i18n";
 import type { Route } from "./+types/admin.agencies";
 import { requireAdmin } from "~/lib/auth.server";
 import { AdminLayout } from "~/components/layout/AdminLayout";
@@ -178,29 +176,11 @@ function currentPackage(a: Row) {
 export default function AdminAgencies({ loaderData, actionData }: Route.ComponentProps) {
   const { agencies, total, totalPages, page, perPage } = loaderData;
   const [searchParams] = useSearchParams();
-  const revalidator = useRevalidator();
-  const t = useT();
 
   useEffect(() => {
     if (actionData?.success) toast.success(actionData.success);
     else if (actionData?.error) toast.error(actionData.error);
   }, [actionData]);
-
-  // Real-time updates from Pusher
-  usePusherChannel(PUSHER_CHANNELS.admin, {
-    [PUSHER_EVENTS.agencyCreated]: (data: unknown) => {
-      const p = data as { companyName?: string | null };
-      const msg = p.companyName
-        ? t.realtime.newAgencyWithName.replace("{name}", p.companyName)
-        : t.realtime.newAgency;
-      toast.info(msg);
-      playNotifySound();
-      revalidator.revalidate();
-    },
-    [PUSHER_EVENTS.agencyStatus]: () => {
-      revalidator.revalidate();
-    },
-  });
 
   const hasFilters = !!(searchParams.get("search") || searchParams.get("status"));
   const selectCls = "px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-500";

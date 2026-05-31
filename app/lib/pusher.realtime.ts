@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
+import { useRevalidator } from "react-router";
+import { toast } from "sonner";
 import type { Channel, default as Pusher } from "pusher-js";
 import { PUSHER_CHANNELS, PUSHER_EVENTS } from "./pusher.shared";
+import { useT } from "./i18n";
 
 export { PUSHER_CHANNELS, PUSHER_EVENTS };
 
@@ -128,4 +131,49 @@ export function usePusherChannel(channelName: string | null, handlers: Record<st
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelName]);
+}
+
+// ── High-level subscriptions: each agency/applicant page just calls one hook ─
+//
+// These wrap usePusherChannel with the standard toast + sound + revalidate
+// behavior, so any agency-side page can subscribe with `useAgencyRealtime(id)`
+// and any applicant-side page with `useApplicantRealtime(userId)`.
+
+export function useAgencyRealtime(agencyId: string | null) {
+  const revalidator = useRevalidator();
+  const t = useT();
+
+  usePusherChannel(agencyId ? PUSHER_CHANNELS.agency(agencyId) : null, {
+    [PUSHER_EVENTS.agencyStatus]: (data: unknown) => {
+      const p = data as { status: string };
+      if (p.status === "active") toast.success(t.realtime.agencyApproved);
+      else if (p.status === "suspended") toast.error(t.realtime.agencySuspended);
+      else if (p.status === "rejected") toast.error(t.realtime.agencyRejected);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+    [PUSHER_EVENTS.paymentStatus]: (data: unknown) => {
+      const p = data as { status: string };
+      if (p.status === "verified") toast.success(t.realtime.paymentApproved);
+      else if (p.status === "rejected") toast.error(t.realtime.paymentRejected);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+  });
+}
+
+export function useApplicantRealtime(userId: string | null) {
+  const revalidator = useRevalidator();
+  const t = useT();
+
+  usePusherChannel(userId ? PUSHER_CHANNELS.applicant(userId) : null, {
+    [PUSHER_EVENTS.applicantStatus]: (data: unknown) => {
+      const p = data as { status: string };
+      if (p.status === "active") toast.success(t.realtime.applicantApproved);
+      else if (p.status === "suspended") toast.error(t.realtime.applicantSuspended);
+      else if (p.status === "rejected") toast.error(t.realtime.applicantRejected);
+      playNotifySound();
+      revalidator.revalidate();
+    },
+  });
 }

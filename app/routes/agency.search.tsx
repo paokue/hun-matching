@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import { OCCUPATIONS, MARITAL_STATUS, TATTOO_STATUS, ETHNICITIES, RELIGIONS } from "~/lib/utils";
 import { useT } from "~/lib/i18n";
+import { useAgencyRealtime } from "~/lib/pusher.realtime";
 import { prisma } from "~/lib/prisma.server";
 
 export function meta(_: Route.MetaArgs) {
@@ -60,6 +61,7 @@ export default function AgencySearch({ loaderData }: Route.ComponentProps) {
   const { profiles, hasMembership, agency } = loaderData;
   const [searchParams] = useSearchParams();
   const t = useT();
+  useAgencyRealtime(agency.id);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">

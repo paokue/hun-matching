@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "~/components/ui/Ca
 import { DocPreview } from "~/components/ui/DocPreview";
 import { Navbar } from "~/components/layout/Navbar";
 import { useT } from "~/lib/i18n";
+import { useApplicantRealtime } from "~/lib/pusher.realtime";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
@@ -103,6 +104,7 @@ function DocUploadCard({ doc, uploaded, td }: { doc: DocItem; uploaded: string |
 
 export default function Documents({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
+  useApplicantRealtime(user.id);
   const t = useT();
 
   const DOC_CONFIG = [

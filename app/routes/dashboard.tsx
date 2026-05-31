@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Link, redirect, useRevalidator } from "react-router";
-import { toast } from "sonner";
+import { Link, redirect } from "react-router";
 
 import { useT } from "~/lib/i18n";
-import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { useApplicantRealtime } from "~/lib/pusher.realtime";
 import { formatDate } from "~/lib/utils";
 import { prisma } from "~/lib/prisma.server";
 import type { Route } from "./+types/dashboard";
@@ -33,19 +32,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const profileComplete = photoCount >= 5 && hasDocuments && user.isProfileComplete;
   const t = useT();
   const [lightbox, setLightbox] = useState<number | null>(null);
-  const revalidator = useRevalidator();
 
   // Real-time updates from Pusher for this specific applicant
-  usePusherChannel(PUSHER_CHANNELS.applicant(user.id), {
-    [PUSHER_EVENTS.applicantStatus]: (data: unknown) => {
-      const p = data as { status: string };
-      if (p.status === "active") toast.success(t.realtime.applicantApproved);
-      else if (p.status === "rejected") toast.error(t.realtime.applicantRejected);
-      else if (p.status === "suspended") toast.error(t.realtime.applicantSuspended);
-      playNotifySound();
-      revalidator.revalidate();
-    },
-  });
+  useApplicantRealtime(user.id);
 
   // Translate a stored enum value (falls back to the raw value, then "—")
   const enumLabel = (group: Record<string, string>, val?: string | null) => (val ? group[val] ?? val : "—");

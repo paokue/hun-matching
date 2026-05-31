@@ -10,6 +10,7 @@ import { Badge } from "~/components/ui/Badge";
 import { parseMultipartForm, uploadToBunny, generateFilePath } from "~/lib/bunny.server";
 import { formatDate } from "~/lib/utils";
 import { useT } from "~/lib/i18n";
+import { useAgencyRealtime } from "~/lib/pusher.realtime";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
@@ -245,6 +246,9 @@ export default function AgencyMembership({ loaderData, actionData }: Route.Compo
   const { agency, packages, hasMembership, pendingPayment, currentPackageId } = loaderData;
   const t = useT();
   const [chosen, setChosen] = useState<Pkg | null>(null);
+
+  // Real-time updates from Pusher for this specific agency
+  useAgencyRealtime(agency.id);
 
   // Close modal + toast after a successful submission
   useEffect(() => {

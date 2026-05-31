@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link, redirect, Form, useFetcher, useNavigate, useSearchParams, useRevalidator } from "react-router";
+import { Link, redirect, Form, useFetcher, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { usePusherChannel, playNotifySound, PUSHER_CHANNELS, PUSHER_EVENTS } from "~/lib/pusher.realtime";
+import { useAgencyRealtime } from "~/lib/pusher.realtime";
 import { SELECTED_POOL } from "~/lib/selectedPool";
 import type { Route } from "./+types/agency.dashboard";
 import { requireAgency } from "~/lib/auth.server";
@@ -165,7 +165,6 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
   const confirmFetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const revalidator = useRevalidator();
 
   // Toast after a successful registration redirect (?registered=1)
   useEffect(() => {
@@ -176,24 +175,7 @@ export default function AgencyDashboard({ loaderData }: Route.ComponentProps) {
   }, [searchParams]);
 
   // Real-time updates from Pusher for this specific agency
-  usePusherChannel(PUSHER_CHANNELS.agency(agency.id), {
-    [PUSHER_EVENTS.agencyStatus]: (data: unknown) => {
-      const p = data as { status: string };
-      if (p.status === "active") toast.success(t.realtime.agencyApproved);
-      else if (p.status === "rejected") toast.error(t.realtime.agencyRejected);
-      else if (p.status === "suspended") toast.error(t.realtime.agencySuspended);
-      playNotifySound();
-      // Re-runs loader; AgencyGate will swap to the live dashboard once status === "active".
-      revalidator.revalidate();
-    },
-    [PUSHER_EVENTS.paymentStatus]: (data: unknown) => {
-      const p = data as { status: string };
-      if (p.status === "verified") toast.success(t.realtime.paymentApproved);
-      else if (p.status === "rejected") toast.error(t.realtime.paymentRejected);
-      playNotifySound();
-      revalidator.revalidate();
-    },
-  });
+  useAgencyRealtime(agency.id);
 
   const [activeTab, setActiveTab] = useState<"new" | "selected">("new");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);

@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from "~/components/ui/Card";
 import { ImageLightbox } from "~/components/ui/ImageLightbox";
 import { formatDate } from "~/lib/utils";
 import { useT } from "~/lib/i18n";
+import { useAgencyRealtime } from "~/lib/pusher.realtime";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 import { prisma } from "~/lib/prisma.server";
@@ -64,6 +65,7 @@ export default function AgencyApplicantDetail({ loaderData }: Route.ComponentPro
   const { profile, agency } = loaderData;
   const t = useT();
   const d = t.agencyApplicantDetail;
+  useAgencyRealtime(agency.id);
 
   const DOCUMENTS = [
     { label: d.nationalId, img: "https://placehold.co/600x400/fff1f2/fb7185?text=National+ID" },
