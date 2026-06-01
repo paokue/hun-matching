@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 import { buildLocaleCookie, type Locale } from "~/lib/locale.server";
 
-const VALID: Locale[] = ["lo", "ko", "en"];
+const VALID: Locale[] = ["lo", "ko", "en", "hmn"];
 
 export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);

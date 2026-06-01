@@ -47,7 +47,11 @@ export const EDUCATION_LEVELS = [
   "Other",
 ] as const;
 
-export const MARITAL_STATUS = ["Single", "Previously Married"] as const;
+export const MARITAL_STATUS = [
+  "Single",
+  "Previously Married (with children)",
+  "Previously Married (no children)",
+] as const;
 
 export const TATTOO_STATUS = ["Has Tattoo", "No Tattoo"] as const;
 

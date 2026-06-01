@@ -1,6 +1,6 @@
-export type Locale = "lo" | "ko" | "en";
+export type Locale = "lo" | "ko" | "en" | "hmn";
 
-const VALID_LOCALES: Locale[] = ["lo", "ko", "en"];
+const VALID_LOCALES: Locale[] = ["lo", "ko", "en", "hmn"];
 const DEFAULT_LOCALE: Locale = "lo";
 
 export function getLocaleFromRequest(request: Request): Locale {

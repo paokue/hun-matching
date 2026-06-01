@@ -39,11 +39,11 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-10">
             {t.home.desc}
           </p>
-          <div className="flex flex-row gap-4 justify-center">
-            <Link to="/login" className="bg-rose-500 hover:bg-rose-600 text-white font-semibold px-4 sm:px-8 py-2 sm:py-3.5 rounded-xl shadow-lg shadow-rose-200 transition-all duration-200 text-sm sm:text-base">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center max-w-xs sm:max-w-none mx-auto">
+            <Link to="/login" className="bg-rose-500 hover:bg-rose-600 text-white font-semibold px-4 sm:px-8 py-3 sm:py-3.5 rounded-xl shadow-lg shadow-rose-200 transition-all duration-200 text-sm sm:text-base text-center whitespace-nowrap">
               {t.home.applicantLoginBtn}
             </Link>
-            <Link to="/agency/login" className="bg-white hover:bg-slate-50 text-slate-800 font-semibold px-4 sm:px-8 py-2 sm:py-3.5 rounded-xl border border-slate-200 shadow-sm transition-all duration-200 text-sm sm:text-base">
+            <Link to="/agency/login" className="bg-white hover:bg-slate-50 text-slate-800 font-semibold px-4 sm:px-8 py-3 sm:py-3.5 rounded-xl border border-slate-200 shadow-sm transition-all duration-200 text-sm sm:text-base text-center whitespace-nowrap">
               {t.home.agencyLoginBtn}
             </Link>
           </div>
