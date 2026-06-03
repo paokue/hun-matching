@@ -1,12 +1,12 @@
 import { toast } from "sonner";
 import { useState, useRef } from "react";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useNavigation } from "react-router";
 
 import { useT } from "~/lib/i18n";
 import { prisma } from "~/lib/prisma.server";
 import type { Route } from "./+types/register.3";
 import { hashPassword, createUserSession } from "~/lib/auth.server";
-import { getRegUserId, destroyRegCookie } from "~/lib/registration.server";
+import { getRegUserId, refreshRegCookie, destroyRegCookie } from "~/lib/registration.server";
 import { uploadToBunny, generateFilePath, parseMultipartForm } from "~/lib/bunny.server";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
@@ -33,7 +33,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
   if (!user) return redirect("/register");
   const savedPhone = user.phone.startsWith("__pending__") ? "" : user.phone;
-  return { user: { ...user, phone: savedPhone } };
+  const refresh = await refreshRegCookie(request);
+  return data({ user: { ...user, phone: savedPhone } }, refresh ? { headers: { "Set-Cookie": refresh } } : undefined);
 }
 
 export async function action({ request }: Route.ActionArgs) {

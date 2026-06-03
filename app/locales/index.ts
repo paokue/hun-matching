@@ -218,7 +218,8 @@ export const en = {
     },
     maritalStatus: {
       Single: "Single",
-      "Previously Married (with children)": "Previously Married (with children)",
+      "Previously Married (with children)":
+        "Previously Married (with children)",
       "Previously Married (no children)": "Previously Married (no children)",
     },
     tattooStatus: {
@@ -700,7 +701,8 @@ export const en = {
       "Payment submitted! Our team will verify and activate your membership shortly.",
     slipExampleLabel: "Example slip — tap to view",
     manualTitle: "Confirm by Phone",
-    manualDesc: "Leave the phone number you used to pay. Our team will call to confirm and activate your membership.",
+    manualDesc:
+      "Leave the phone number you used to pay. Our team will call to confirm and activate your membership.",
     manualPhoneLabel: "Phone Number",
     manualPhonePh: "+856 20...",
   },
@@ -803,7 +805,7 @@ export const lo: Translations = {
     title: "ອະນາຄົດຂອງເຈົ້າເລີ່ມຕົ້ນ",
     titleHighlight: "ທີ່ນີ້",
     desc: "HanMatching ເຊື່ອມຕໍ່ຜູ້ສະໝັກທີ່ມີຄວາມສາມາດກັບໜ່ວຍງານທີ່ໜ້າເຊື່ອຖື. ລົງທະບຽນງ່າຍ, ໂປຣໄຟລ໌ປອດໄພ, ແລະ ໂອກາດທີ່ແທ້ຈິງ.",
-    applicantLoginBtn: "ເຂົ້າສູ່ລະບົບຜູ້ສະໝັກ",
+    applicantLoginBtn: "ເຂົ້າສູ່ລະບົບ ຜູ້ສະໝັກ",
     agencyLoginBtn: "ເຂົ້າສູ່ລະບົບ ໜ່ວຍງານ",
     howItWorks: "ວິທີດຳເນີນການ",
     howSubtitle: "ງ່າຍ, ໄວ, ແລະ ປອດໄພ — ອອກແບບສຳລັບທຸກຄົນ.",
@@ -844,7 +846,7 @@ export const lo: Translations = {
     loggingIn: "ກຳລັງເຂົ້າສູ່ລະບົບ...",
     loginBtn: "ເຂົ້າສູ່ລະບົບ",
     forgotPassword: "ລືມລະຫັດຜ່ານ?",
-    createAccount: "ສ້າງບັນຊີ",
+    createAccount: "ສ້າງບັນຊີໃໝ່",
     isAgency: "ທ່ານເປັນໜ່ວຍງານ?",
     agencyLoginLink: "ເຂົ້າສູ່ລະບົບ ໜ່ວຍງານ",
   },
@@ -1189,7 +1191,7 @@ export const lo: Translations = {
     loggingIn: "ກຳລັງເຂົ້າສູ່ລະບົບ...",
     loginBtn: "ເຂົ້າສູ່ລະບົບ",
     forgotPassword: "ລືມລະຫັດຜ່ານ?",
-    createAccount: "ສ້າງບັນຊີ",
+    createAccount: "ສ້າງບັນຊີໃໝ່",
     isApplicant: "ກຳລັງຊອກຫາການເຂົ້າສູ່ລະບົບຜູ້ສະໝັກ?",
     loginHere: "ເຂົ້າສູ່ລະບົບທີ່ນີ້",
   },
@@ -1474,7 +1476,8 @@ export const lo: Translations = {
       "ສົ່ງການຈ່າຍເງິນແລ້ວ! ທີມງານຈະກວດສອບ ແລະ ເປີດໃຊ້ສະມາຊິກໃນໄວໆນີ້.",
     slipExampleLabel: "ຕົວຢ່າງໃບເສັດ — ກົດເພື່ອເບິ່ງ",
     manualTitle: "ຢືນຢັນຜ່ານໂທລະສັບ",
-    manualDesc: "ຝາກເບີໂທລະສັບທີ່ທ່ານໃຊ້ໃນການຈ່າຍເງິນ. ທີມງານຈະໂທຫາທ່ານເພື່ອຢືນຢັນ ແລະ ເປີດໃຊ້ສະມາຊິກ.",
+    manualDesc:
+      "ຝາກເບີໂທລະສັບທີ່ທ່ານໃຊ້ໃນການຈ່າຍເງິນ. ທີມງານຈະໂທຫາທ່ານເພື່ອຢືນຢັນ ແລະ ເປີດໃຊ້ສະມາຊິກ.",
     manualPhoneLabel: "ເບີໂທລະສັບ",
     manualPhonePh: "+856 20...",
   },
@@ -2249,7 +2252,8 @@ export const ko: Translations = {
       "결제가 제출되었습니다! 팀이 확인 후 멤버십을 곧 활성화합니다.",
     slipExampleLabel: "예시 명세서 — 탭하여 보기",
     manualTitle: "전화로 확인",
-    manualDesc: "결제에 사용한 전화번호를 남겨주세요. 팀이 전화로 확인 후 멤버십을 활성화합니다.",
+    manualDesc:
+      "결제에 사용한 전화번호를 남겨주세요. 팀이 전화로 확인 후 멤버십을 활성화합니다.",
     manualPhoneLabel: "전화번호",
     manualPhonePh: "+856 20...",
   },
@@ -2360,7 +2364,8 @@ export const hmn: Translations = {
     step1Desc:
       "Sau npe nrog koj cov ntaub ntawv, upload cov duab thiab cov ntawv. Tau ib tug ID tshwj xeeb.",
     step2Title: "Raug Pom",
-    step2Desc: "Cov koom haum saib cov profile thiab tiv tauj cov hluas nkauj uas haum siab.",
+    step2Desc:
+      "Cov koom haum saib cov profile thiab tiv tauj cov hluas nkauj uas haum siab.",
     step3Title: "Sib Cuag & Tiav",
     step3Desc:
       "Cov koom haum tau pom zoo muaj cai saib cov profile tag nrho tom qab los ua tus tswv cuab.",
@@ -2399,7 +2404,8 @@ export const hmn: Translations = {
   },
   register: {
     title: "Tsim Koj Tus Profile",
-    subtitle: "Tuaj koom HanMatching thiab raug pom los ntawm cov koom haum tau ntseeg",
+    subtitle:
+      "Tuaj koom HanMatching thiab raug pom los ntawm cov koom haum tau ntseeg",
     profileIdCard: "Tsim Koj Tus Profile ID",
     profileIdDesc:
       "Tus ID tshwj xeeb: lub npe + cov lej koj nyiam (xws li: Anna123)",
@@ -2549,8 +2555,10 @@ export const hmn: Translations = {
     },
     maritalStatus: {
       Single: "Tsis Tau Sib Yuav",
-      "Previously Married (with children)": "Twb Sib Yuav Tag Lawm (Muaj Me Nyuam)",
-      "Previously Married (no children)": "Twb Sib Yuav Tag Lawm (Tsis Muaj Me Nyuam)",
+      "Previously Married (with children)":
+        "Twb Sib Yuav Tag Lawm (Muaj Me Nyuam)",
+      "Previously Married (no children)":
+        "Twb Sib Yuav Tag Lawm (Tsis Muaj Me Nyuam)",
     },
     tattooStatus: {
       "Has Tattoo": "Muaj Tattoo",
@@ -2593,11 +2601,14 @@ export const hmn: Translations = {
     welcome: "Zoo Siab Tos Txais,",
     profileIdLabel: "Profile ID:",
     statusLabel: "Profile Status:",
-    pendingMsg: "Koj tus profile tab tom raug tshuaj xyuas. Thov ua kom tiav txhua qhov yuav tsum tau.",
-    activeMsg: "Koj tus profile ua hauj lwm thiab cov koom haum tau pom zoo pom tau.",
+    pendingMsg:
+      "Koj tus profile tab tom raug tshuaj xyuas. Thov ua kom tiav txhua qhov yuav tsum tau.",
+    activeMsg:
+      "Koj tus profile ua hauj lwm thiab cov koom haum tau pom zoo pom tau.",
     suspendedMsg: "Account raug ncua. Thov tiv tauj kev pab.",
     completionTitle: "Profile Tiav",
-    completionDesc: "Ua kom tiav txhua kauj ruam kom cov koom haum pom tau koj tus profile",
+    completionDesc:
+      "Ua kom tiav txhua kauj ruam kom cov koom haum pom tau koj tus profile",
     check1: "Cov ntaub ntawv tseem ceeb",
     check2: "Cov duab (tsawg kawg 5 ua hauj lwm)",
     check3: "Cov ntawv pov thawj tus kheej",
@@ -2638,7 +2649,8 @@ export const hmn: Translations = {
     statusActive: "Ua Hauj Lwm",
     statusSuspended: "Raug Ncua",
     viewDoc: "Saib",
-    editLockedMsg: "Koj tus profile yuav raug kaw rau kev kho thaum tau pom zoo.",
+    editLockedMsg:
+      "Koj tus profile yuav raug kaw rau kev kho thaum tau pom zoo.",
   },
   edit: {
     backBtn: "← Daim Tswj",
@@ -2746,7 +2758,8 @@ export const hmn: Translations = {
     title: "Sau Npe Lub Koom Haum",
     subtitle: "Tsim lub koom haum account",
     agencyIdCard: "Agency ID",
-    agencyIdDesc: "Tus ID tshwj xeeb rau lub koom haum (piv txwv: BestAgency001)",
+    agencyIdDesc:
+      "Tus ID tshwj xeeb rau lub koom haum (piv txwv: BestAgency001)",
     agencyNameLabel: "Lub Npe Luv Luv",
     agencyNamePh: "Piv txwv: BestAgency",
     agencyNameHint: "Cov tsiaj ntawv xwb",
@@ -2781,7 +2794,8 @@ export const hmn: Translations = {
     pendingDesc:
       "Koj lub koom haum account raug xa thiab tos kev tshuaj xyuas. Koj yuav tau kev nkag tag nrho thaum tau pom zoo.",
     suspendedTitle: "Account Raug Ncua",
-    suspendedDesc: "Koj lub koom haum account raug ncua. Thov tiv tauj kev pab.",
+    suspendedDesc:
+      "Koj lub koom haum account raug ncua. Thov tiv tauj kev pab.",
     agencyIdLabel: "Agency ID:",
     signOut: "Tawm",
   },
@@ -2981,7 +2995,8 @@ export const hmn: Translations = {
     activeMembership: "Membership Ua Hauj Lwm",
     membershipExpires: "Koj membership tas sij hawm rau hnub",
     paymentUnderReview: "Them Nyiaj Tab Tom Tshuaj Xyuas",
-    paymentOfAmount: "Cov nyiaj them ${amount} rau {package} tab tom pov thawj.",
+    paymentOfAmount:
+      "Cov nyiaj them ${amount} rau {package} tab tom pov thawj.",
     noPackages: "Tsis tau muaj pob. Thov tiv tauj kev pab.",
     mostPopular: "Niam Tau Ntau Tshaj",
     daysAccess: "hnub",
@@ -3013,7 +3028,8 @@ export const hmn: Translations = {
     nextBtn: "Tom Ntej",
     backStepBtn: "Rov Qab",
     payStep2Title: "Upload Daim Receipt",
-    payStep2Desc: "Upload ib daim duab los sis screenshot ntawm daim receipt rau pab pawg pov thawj.",
+    payStep2Desc:
+      "Upload ib daim duab los sis screenshot ntawm daim receipt rau pab pawg pov thawj.",
     uploadSlipHint: "Nias upload daim receipt",
     submitBtn: "Xa",
     errNoSlip: "Thov upload daim receipt them nyiaj.",
@@ -3023,7 +3039,8 @@ export const hmn: Translations = {
       "Xa cov nyiaj them tiav! Pab pawg yuav pov thawj thiab qhib membership sai sai no.",
     slipExampleLabel: "Daim receipt piv txwv — nias saib",
     manualTitle: "Lees Los Ntawm Xov Tooj",
-    manualDesc: "Tso tus xov tooj koj siv them nyiaj. Pab pawg yuav hu lees thiab qhib koj membership.",
+    manualDesc:
+      "Tso tus xov tooj koj siv them nyiaj. Pab pawg yuav hu lees thiab qhib koj membership.",
     manualPhoneLabel: "Tus Xov Tooj",
     manualPhonePh: "+856 20...",
   },
@@ -3032,9 +3049,11 @@ export const hmn: Translations = {
     title: "Kuv Cov Hluas Nkauj Xaiv",
     infoMsg: "Cov hluas nkauj xaiv yuav raug khaws rau koj tus list ntev",
     infoMonths: "4 hli",
-    infoMsgSuffix: ". Tom qab tas sij hawm, lawv yuav rov qab mus rau cov general.",
+    infoMsgSuffix:
+      ". Tom qab tas sij hawm, lawv yuav rov qab mus rau cov general.",
     activeTitle: "Ua Hauj Lwm",
-    noActiveSelections: "Tsis muaj kev xaiv ua hauj lwm. Saib cov profile thiab ntxiv cov hluas nkauj.",
+    noActiveSelections:
+      "Tsis muaj kev xaiv ua hauj lwm. Saib cov profile thiab ntxiv cov hluas nkauj.",
     browseProfiles: "Saib Cov Profile →",
     expiredTitle: "Tas Sij Hawm",
     daysLeft: "hnub seem",
@@ -3095,14 +3114,18 @@ export const hmn: Translations = {
     newAgencyWithName: "Koom haum tshiab: {name}",
     newPayment: "Muaj kev them nyiaj tshiab",
     newPaymentWithAmount: "Them nyiaj tshiab: ${amount}",
-    applicantApproved: "Koj tus profile tau pom zoo lawm! Ua hauj lwm tau lawm.",
-    applicantRejected: "Koj tus profile raug tsis pom zoo. Thov tiv tauj kev pab.",
+    applicantApproved:
+      "Koj tus profile tau pom zoo lawm! Ua hauj lwm tau lawm.",
+    applicantRejected:
+      "Koj tus profile raug tsis pom zoo. Thov tiv tauj kev pab.",
     applicantSuspended: "Koj tus profile raug ncua.",
     agencyApproved: "Koj lub koom haum tau pom zoo lawm! Zoo siab tos txais.",
-    agencyRejected: "Koj lub koom haum raug tsis pom zoo. Thov tiv tauj kev pab.",
+    agencyRejected:
+      "Koj lub koom haum raug tsis pom zoo. Thov tiv tauj kev pab.",
     agencySuspended: "Koj lub koom haum raug ncua.",
     agencyActivated: "Koj lub koom haum raug qhib rov qab lawm.",
-    paymentApproved: "Cov nyiaj them tau pov thawj! Koj membership ua hauj lwm lawm.",
+    paymentApproved:
+      "Cov nyiaj them tau pov thawj! Koj membership ua hauj lwm lawm.",
     paymentRejected: "Cov nyiaj them raug tsis pom zoo. Thov tiv tauj kev pab.",
   },
 };

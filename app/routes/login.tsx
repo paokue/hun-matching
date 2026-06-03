@@ -94,11 +94,8 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
                 {isSubmitting ? t.login.loggingIn : t.login.loginBtn}
               </Button>
 
-              <div className="flex justify-between text-sm">
-                <Link to="/forgot-password" className="text-rose-500 hover:text-rose-600">
-                  {t.login.forgotPassword}
-                </Link>
-                <Link to="/register" className="text-slate-500 hover:text-slate-700">
+              <div className="flex justify-end text-sm">
+                <Link to="/register" className="font-bold text-rose-500 hover:text-rose-600 underline">
                   {t.login.createAccount}
                 </Link>
               </div>

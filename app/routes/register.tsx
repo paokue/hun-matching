@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useT } from "~/lib/i18n";
 import type { Route } from "./+types/register";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useNavigation } from "react-router";
 
 import { prisma } from "~/lib/prisma.server";
 import { Input, Select } from "~/components/ui/Input";
 import { autoProfileId, calculateAge } from "~/lib/utils";
-import { buildRegCookie, getRegUserId } from "~/lib/registration.server";
+import { buildRegCookie, getRegUserId, refreshRegCookie } from "~/lib/registration.server";
 import { hashPassword, getUserFromSession } from "~/lib/auth.server";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
@@ -40,7 +40,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       })
     : null;
 
-  return { saved };
+  // Slide the 30-day cookie window forward on every visit while an
+  // in-progress registration exists.
+  const refresh = await refreshRegCookie(request);
+  return data({ saved }, refresh ? { headers: { "Set-Cookie": refresh } } : undefined);
 }
 
 export async function action({ request }: Route.ActionArgs) {

@@ -86,9 +86,7 @@ export function Navbar({ user }: NavbarProps) {
         <div className="flex items-center justify-between h-16 gap-4">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 bg-rose-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">H</span>
-            </div>
+            <img src="/favicon.svg" alt="" className="w-8 h-8" />
             <span className="font-bold text-lg text-slate-900 inline">HanMatching</span>
           </Link>
 

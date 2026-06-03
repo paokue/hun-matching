@@ -66,9 +66,8 @@ export default function AgencyLogin({ loaderData, actionData }: Route.ComponentP
               <Button type="submit" variant="secondary" loading={isSubmitting} size="lg" className="w-full">
                 {isSubmitting ? t.agencyLogin.loggingIn : t.agencyLogin.loginBtn}
               </Button>
-              <div className="flex justify-between text-sm">
-                <Link to="/agency/forgot-password" className="text-rose-500 hover:text-rose-600">{t.agencyLogin.forgotPassword}</Link>
-                <Link to="/agency/register" className="text-slate-500 hover:text-slate-700">{t.agencyLogin.createAccount}</Link>
+              <div className="flex justify-end text-sm">
+                <Link to="/agency/register" className="font-bold text-rose-500 hover:text-rose-600 underline">{t.agencyLogin.createAccount}</Link>
               </div>
             </Form>
 

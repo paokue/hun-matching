@@ -1,11 +1,11 @@
-import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useActionData, useNavigation } from "react-router";
 import type { Route } from "./+types/register.2";
 import { Input, Select } from "~/components/ui/Input";
 import { Button } from "~/components/ui/Button";
 import { Card, CardHeader, CardTitle } from "~/components/ui/Card";
 import { StepIndicator } from "~/components/ui/StepIndicator";
 import { Navbar } from "~/components/layout/Navbar";
-import { getRegUserId } from "~/lib/registration.server";
+import { getRegUserId, refreshRegCookie } from "~/lib/registration.server";
 import { LAO_PROVINCES } from "~/lib/utils";
 import { useT } from "~/lib/i18n";
 import { prisma } from "~/lib/prisma.server";
@@ -19,7 +19,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!uid) return redirect("/register");
   const user = await prisma.user.findUnique({ where: { id: uid }, select: { id: true, fullName: true, birthProvince: true, birthDistrict: true, birthVillage: true, currentProvince: true, currentDistrict: true, currentVillage: true } });
   if (!user) return redirect("/register");
-  return { user };
+  const refresh = await refreshRegCookie(request);
+  return data({ user }, refresh ? { headers: { "Set-Cookie": refresh } } : undefined);
 }
 
 export async function action({ request }: Route.ActionArgs) {

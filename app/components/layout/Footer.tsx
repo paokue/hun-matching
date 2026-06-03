@@ -10,9 +10,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 bg-rose-500 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xs">H</span>
-              </div>
+              <img src="/favicon.svg" alt="" className="w-7 h-7" />
               <span className="font-bold text-white">HanMatching</span>
             </div>
             <p className="text-sm">{t.footer.tagline}</p>
