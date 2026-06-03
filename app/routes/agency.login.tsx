@@ -16,7 +16,7 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await getUserFromSession(request);
   if (session?.role === "agency") return redirect("/agency/dashboard");
-  return null;
+  return { isDev: process.env.NODE_ENV !== "production" };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -36,10 +36,11 @@ export async function action({ request }: Route.ActionArgs) {
   return createUserSession(agency.id, "agency", "/agency/dashboard");
 }
 
-export default function AgencyLogin({ actionData }: Route.ComponentProps) {
+export default function AgencyLogin({ loaderData, actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const t = useT();
+  const isDev = loaderData?.isDev ?? false;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -76,11 +77,13 @@ export default function AgencyLogin({ actionData }: Route.ComponentProps) {
               <Link to="/login" className="text-rose-500 hover:text-rose-600 font-medium">{t.agencyLogin.loginHere}</Link>
             </p>
 
-            <DevFill
-              credentials={[
-                { label: "🏢 Test Agency", values: { emailOrId: "agency@test.com", password: "Test1234!" } },
-              ]}
-            />
+            {isDev && (
+              <DevFill
+                credentials={[
+                  { label: "🏢 Test Agency", values: { emailOrId: "agency@test.com", password: "Test1234!" } },
+                ]}
+              />
+            )}
           </Card>
         </div>
       </main>

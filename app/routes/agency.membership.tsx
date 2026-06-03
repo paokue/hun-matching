@@ -17,7 +17,26 @@ import { prisma } from "~/lib/prisma.server";
 import { notifyPaymentCreated } from "~/lib/pusher.server";
 import { sendAdminNewPaymentEmail } from "~/lib/mail.server";
 
-type Pkg = { id: string; name: string; description: string | null; price: number; durationDays: number; features: string[] };
+type Pkg = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  price2: number | null;
+  durationDays: number;
+  profileCount: number;
+  features: string[];
+};
+
+// ── Color palette cycled per card (matches admin.packages) ──────────────────
+const COLORS = [
+  { ring: "border-rose-200 ring-1 ring-rose-100",       bar: "bg-rose-500",    price: "text-rose-500",    chip: "bg-rose-50 text-rose-600" },
+  { ring: "border-blue-200 ring-1 ring-blue-100",       bar: "bg-blue-500",    price: "text-blue-500",    chip: "bg-blue-50 text-blue-600" },
+  { ring: "border-emerald-200 ring-1 ring-emerald-100", bar: "bg-emerald-500", price: "text-emerald-500", chip: "bg-emerald-50 text-emerald-600" },
+  { ring: "border-violet-200 ring-1 ring-violet-100",   bar: "bg-violet-500",  price: "text-violet-500",  chip: "bg-violet-50 text-violet-600" },
+  { ring: "border-amber-200 ring-1 ring-amber-100",     bar: "bg-amber-500",   price: "text-amber-500",   chip: "bg-amber-50 text-amber-600" },
+  { ring: "border-orange-200 ring-1 ring-orange-100",   bar: "bg-orange-500",  price: "text-orange-500",  chip: "bg-orange-50 text-orange-600" },
+];
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "Membership Packages — HanMatching.com" }];
@@ -28,7 +47,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const [agency, packages, pendingPayment] = await Promise.all([
     prisma.agency.findUnique({ where: { id: session.userId } }),
-    prisma.membershipPackage.findMany({ where: { isActive: true }, orderBy: { price: "asc" } }),
+    prisma.membershipPackage.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { price: "asc" }] }),
     prisma.payment.findFirst({ where: { agencyId: session.userId, status: "pending" } }),
   ]);
 
@@ -47,12 +66,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     currentPackageId = activePayment?.packageId ?? null;
   }
 
-  return { agency, packages, hasMembership, pendingPayment, currentPackageId };
+  const paymentType: "qr" | "manual" = process.env.PAYMENT_TYPE === "manual" ? "manual" : "qr";
+
+  return { agency, packages, hasMembership, pendingPayment, currentPackageId, paymentType };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireAgency(request);
   const tr = getTranslations(getLocaleFromRequest(request)).agencyMembership;
+  const paymentType: "qr" | "manual" = process.env.PAYMENT_TYPE === "manual" ? "manual" : "qr";
 
   const { fields, files } = await parseMultipartForm(request);
   const packageId = fields.packageId;
@@ -61,12 +83,21 @@ export async function action({ request }: Route.ActionArgs) {
   const pkg = await prisma.membershipPackage.findUnique({ where: { id: packageId } });
   if (!pkg) return { error: tr.errNoPackage };
 
-  const receiptFile = files.receipt?.[0];
-  if (!receiptFile) return { error: tr.errNoSlip };
-
   const agency = await prisma.agency.findUnique({ where: { id: session.userId }, select: { agencyId: true } });
-  const path = generateFilePath("receipts", agency?.agencyId ?? session.userId, receiptFile.filename);
-  const receiptUrl = await uploadToBunny(receiptFile.buffer, path, receiptFile.contentType);
+
+  let receiptUrl: string | null = null;
+  let paymentPhone: string | null = null;
+
+  if (paymentType === "manual") {
+    const phone = (fields.paymentPhone || "").trim();
+    if (!phone) return { error: tr.errNoPhone };
+    paymentPhone = phone;
+  } else {
+    const receiptFile = files.receipt?.[0];
+    if (!receiptFile) return { error: tr.errNoSlip };
+    const path = generateFilePath("receipts", agency?.agencyId ?? session.userId, receiptFile.filename);
+    receiptUrl = await uploadToBunny(receiptFile.buffer, path, receiptFile.contentType);
+  }
 
   const payment = await prisma.payment.create({
     data: {
@@ -75,8 +106,10 @@ export async function action({ request }: Route.ActionArgs) {
       packageName: pkg.name,
       amount: pkg.price,
       currency: "USD",
-      paymentMethod: "QR / Bank Transfer",
+      paymentType,
+      paymentMethod: paymentType === "manual" ? "Manual / Phone" : "QR / Bank Transfer",
       receiptUrl,
+      paymentPhone,
       status: "pending",
     },
   });
@@ -104,8 +137,54 @@ export async function action({ request }: Route.ActionArgs) {
   return { success: tr.submitSuccess };
 }
 
-// ── Two-step payment modal ─────────────────────────────────────────────────────
-function PaymentModal({ pkg, onClose }: { pkg: Pkg; onClose: () => void }) {
+// ── Manual payment modal (single phone input) ─────────────────────────────────
+function ManualPaymentModal({ pkg, onClose }: { pkg: Pkg; onClose: () => void }) {
+  const t = useT().agencyMembership;
+  const navigation = useNavigation();
+  const submitting = navigation.state === "submitting";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="font-bold text-slate-900">{t.payTitle}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{pkg.name} · {t.amountLabel}: <span className="font-semibold text-rose-500">${pkg.price}</span></p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <Form method="post" encType="multipart/form-data" className="px-6 py-6">
+          <input type="hidden" name="packageId" value={pkg.id} />
+          <h3 className="font-semibold text-slate-800 mb-1">{t.manualTitle}</h3>
+          <p className="text-sm text-slate-500 mb-4 leading-relaxed">{t.manualDesc}</p>
+
+          <label className="block text-xs font-medium text-slate-600 mb-1">{t.manualPhoneLabel}</label>
+          <input
+            type="tel"
+            name="paymentPhone"
+            required
+            placeholder={t.manualPhonePh}
+            className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 mb-4"
+          />
+
+          <div className="flex gap-3">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>{t.backStepBtn}</Button>
+            <Button type="submit" className="flex-1" loading={submitting}>{t.submitBtn}</Button>
+          </div>
+        </Form>
+      </div>
+    </div>
+  );
+}
+
+// ── Two-step QR payment modal ─────────────────────────────────────────────────
+function QrPaymentModal({ pkg, onClose }: { pkg: Pkg; onClose: () => void }) {
   const t = useT().agencyMembership;
   const navigation = useNavigation();
   const submitting = navigation.state === "submitting";
@@ -243,7 +322,7 @@ function PaymentModal({ pkg, onClose }: { pkg: Pkg; onClose: () => void }) {
 }
 
 export default function AgencyMembership({ loaderData, actionData }: Route.ComponentProps) {
-  const { agency, packages, hasMembership, pendingPayment, currentPackageId } = loaderData;
+  const { agency, packages, hasMembership, pendingPayment, currentPackageId, paymentType } = loaderData;
   const t = useT();
   const [chosen, setChosen] = useState<Pkg | null>(null);
 
@@ -297,35 +376,61 @@ export default function AgencyMembership({ loaderData, actionData }: Route.Compo
         {packages.length === 0 ? (
           <Card className="text-center py-12"><p className="text-slate-400 text-4xl mb-3">📦</p><p className="text-slate-600">{t.agencyMembership.noPackages}</p></Card>
         ) : (
-          <div className="grid md:grid-cols-3 gap-5 mb-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
             {packages.map((pkg, i) => {
+              const c = COLORS[i % COLORS.length];
               const isCurrent = pkg.id === currentPackageId;
-              const cardRing = isCurrent ? "border-rose-500 ring-2 ring-rose-500 ring-offset-2" : i === 1 ? "border-rose-200 ring-2 ring-rose-200 ring-offset-2" : "";
               return (
-                <Card key={pkg.id} className={cardRing}>
-                  {isCurrent ? (
-                    <div className="text-center mb-3"><Badge variant="danger">{t.agencyMembership.currentPlan}</Badge></div>
-                  ) : i === 1 ? (
-                    <div className="text-center mb-3"><Badge variant="warning">{t.agencyMembership.mostPopular}</Badge></div>
-                  ) : null}
-                  <CardHeader>
-                    <CardTitle>{pkg.name}</CardTitle>
-                    <CardDescription>{pkg.description}</CardDescription>
-                  </CardHeader>
-                  <div className="text-3xl font-extrabold text-slate-900 mb-1">${pkg.price}</div>
-                  <p className="text-sm text-slate-500 mb-4">{pkg.durationDays} {t.agencyMembership.daysAccess}</p>
-                  <ul className="space-y-2 mb-5">
-                    {pkg.features.map((f) => <li key={f} className="text-sm text-slate-600 flex items-center gap-2"><span className="text-green-500">✓</span> {f}</li>)}
-                  </ul>
-                  {pendingPayment ? (
-                    <p className="text-xs text-center text-slate-400 mt-2">{t.agencyMembership.pendingReview}</p>
-                  ) : isCurrent ? (
-                    <p className="text-xs text-center text-rose-500 font-medium mt-2">{t.agencyMembership.currentPlan}</p>
-                  ) : (
-                    <Button size="sm" className="w-full" variant={i === 1 ? "primary" : "outline"} onClick={() => setChosen(pkg)}>
-                      {t.agencyMembership.chooseBtn}
-                    </Button>
-                  )}
+                <Card key={pkg.id} className={`relative overflow-hidden ${c.ring}`} padding="md">
+                  <div className={`absolute inset-x-0 top-0 h-1.5 ${c.bar}`} />
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h3 className="font-semibold text-slate-900">{pkg.name}</h3>
+                      {isCurrent ? (
+                        <Badge variant="danger">{t.agencyMembership.currentPlan}</Badge>
+                      ) : i === 1 ? (
+                        <Badge variant="warning">{t.agencyMembership.mostPopular}</Badge>
+                      ) : null}
+                    </div>
+                    {pkg.description && <p className="text-sm text-slate-500 mb-2">{pkg.description}</p>}
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <p className={`text-3xl font-extrabold ${c.price}`}>${pkg.price}</p>
+                      {pkg.price2 != null && (
+                        <p className="text-base font-semibold text-slate-400 line-through">${pkg.price2}</p>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mb-1">{pkg.durationDays} {t.agencyMembership.daysAccess}</p>
+                    {pkg.profileCount > 0 && (
+                      <p className="text-xs text-slate-500 mb-3">
+                        <span className="font-semibold text-slate-700">{pkg.profileCount}</span> {t.agencyMembership.profilesAccess}
+                      </p>
+                    )}
+
+                    {pkg.features.length > 0 && (
+                      <ul className="space-y-1 mb-4">
+                        {pkg.features.map((f) => (
+                          <li key={f} className={`inline-flex items-start gap-1.5 text-xs ${c.chip} px-2 py-0.5 rounded-full mr-1 mb-1`}>
+                            <svg className="w-3 h-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      {pendingPayment ? (
+                        <p className="text-xs text-center text-slate-400">{t.agencyMembership.pendingReview}</p>
+                      ) : isCurrent ? (
+                        <p className="text-xs text-center text-rose-500 font-medium">{t.agencyMembership.currentPlan}</p>
+                      ) : (
+                        <Button size="sm" className="w-full" variant={i === 1 ? "primary" : "outline"} onClick={() => setChosen(pkg)}>
+                          {t.agencyMembership.chooseBtn}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </Card>
               );
             })}
@@ -341,7 +446,10 @@ export default function AgencyMembership({ loaderData, actionData }: Route.Compo
         </div>
       </main>
 
-      {chosen && <PaymentModal pkg={chosen} onClose={() => setChosen(null)} />}
+      {chosen && (paymentType === "manual"
+        ? <ManualPaymentModal pkg={chosen} onClose={() => setChosen(null)} />
+        : <QrPaymentModal pkg={chosen} onClose={() => setChosen(null)} />
+      )}
     </div>
   );
 }

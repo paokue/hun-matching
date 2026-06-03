@@ -14,7 +14,7 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await getUserFromSession(request);
   if (session?.role === "admin") return redirect("/admin");
-  return null;
+  return { isDev: process.env.NODE_ENV !== "production" };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -33,9 +33,10 @@ export async function action({ request }: Route.ActionArgs) {
   return createUserSession(admin.id, "admin", "/admin");
 }
 
-export default function AdminLogin({ actionData }: Route.ComponentProps) {
+export default function AdminLogin({ loaderData, actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const isDev = loaderData?.isDev ?? false;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
@@ -59,7 +60,7 @@ export default function AdminLogin({ actionData }: Route.ComponentProps) {
               label="Username"
               name="username"
               placeholder="admin"
-              defaultValue="admin"
+              defaultValue={isDev ? "admin" : undefined}
               required
             />
             <Input
@@ -67,7 +68,7 @@ export default function AdminLogin({ actionData }: Route.ComponentProps) {
               name="password"
               showPasswordToggle
               placeholder="Your password"
-              defaultValue="Admin@123456"
+              defaultValue={isDev ? "Admin@123456" : undefined}
               required
             />
             <Button type="submit" loading={isSubmitting} className="w-full" size="lg">
@@ -75,11 +76,13 @@ export default function AdminLogin({ actionData }: Route.ComponentProps) {
             </Button>
           </Form>
 
-          <DevFill
-            credentials={[
-              { label: "👤 Admin", values: { username: "admin", password: "Admin@123456" } },
-            ]}
-          />
+          {isDev && (
+            <DevFill
+              credentials={[
+                { label: "👤 Admin", values: { username: "admin", password: "Admin@123456" } },
+              ]}
+            />
+          )}
         </Card>
       </div>
     </div>

@@ -96,14 +96,16 @@ const Ico = {
   receipt: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
   check: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   x: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  phone: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h2.28a1 1 0 01.95.68l1.5 4.5a1 1 0 01-.51 1.21l-1.93.97a11 11 0 005.52 5.52l.97-1.93a1 1 0 011.21-.51l4.5 1.5a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.72 21 3 14.28 3 6V5z" /></svg>,
 };
 
 function RowActions({ payment }: { payment: Row }) {
   const [confirm, setConfirm] = useState<null | "verify" | "reject">(null);
   const itemCls = "w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left";
   const isPending = payment.status === "pending";
+  const isManual = payment.paymentType === "manual";
 
-  if (!payment.receiptUrl && !isPending) {
+  if (!payment.receiptUrl && !payment.paymentPhone && !isPending) {
     return payment.membershipEndDate
       ? <span className="text-xs text-slate-400">Expires {formatDate(payment.membershipEndDate)}</span>
       : <span className="text-xs text-slate-400">—</span>;
@@ -114,7 +116,12 @@ function RowActions({ payment }: { payment: Row }) {
       <DropdownMenu trigger={Ico.dots} width={208}>
         {(close) => (
           <>
-            {payment.receiptUrl && (
+            {isManual && payment.paymentPhone && (
+              <a href={`tel:${payment.paymentPhone}`} className={itemCls} onClick={close}>
+                <span className="text-blue-500">{Ico.phone}</span> Call {payment.paymentPhone}
+              </a>
+            )}
+            {!isManual && payment.receiptUrl && (
               <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer" className={itemCls} onClick={close}>
                 <span className="text-blue-500">{Ico.receipt}</span> View Receipt
               </a>
@@ -220,7 +227,16 @@ export default function AdminPayments({ loaderData, actionData }: Route.Componen
                     <td className="px-4 py-3"><p className="font-medium text-slate-900">{payment.agency?.companyName}</p><p className="text-xs text-slate-500">{payment.agency?.email}</p></td>
                     <td className="px-4 py-3 text-slate-600">{payment.packageName}</td>
                     <td className="px-4 py-3 font-bold text-slate-900">${payment.amount}</td>
-                    <td className="px-4 py-3 text-slate-600">{payment.paymentMethod}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      <Badge variant={payment.paymentType === "manual" ? "info" : "default"}>
+                        {payment.paymentType === "manual" ? "Manual" : "QR"}
+                      </Badge>
+                      {payment.paymentType === "manual" && payment.paymentPhone && (
+                        <a href={`tel:${payment.paymentPhone}`} className="block text-xs text-blue-500 hover:text-blue-600 mt-1">
+                          {payment.paymentPhone}
+                        </a>
+                      )}
+                    </td>
                     <td className="px-4 py-3"><Badge variant={statusVariant(payment.status)}>{payment.status}</Badge></td>
                     <td className="px-4 py-3 text-xs text-slate-500">{formatDate(payment.createdAt)}</td>
                     <td className="px-4 py-3 text-right"><RowActions payment={payment} /></td>
@@ -258,9 +274,19 @@ export default function AdminPayments({ loaderData, actionData }: Route.Componen
                   <dd className="font-medium text-slate-700 truncate">{payment.packageName}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-slate-400">Method</dt>
-                  <dd>{payment.paymentMethod}</dd>
+                  <dt className="text-slate-400">Type</dt>
+                  <dd className="flex items-center gap-1.5">
+                    <Badge variant={payment.paymentType === "manual" ? "info" : "default"}>
+                      {payment.paymentType === "manual" ? "Manual" : "QR"}
+                    </Badge>
+                  </dd>
                 </div>
+                {payment.paymentType === "manual" && payment.paymentPhone && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-slate-400">Phone</dt>
+                    <dd><a href={`tel:${payment.paymentPhone}`} className="text-blue-500">{payment.paymentPhone}</a></dd>
+                  </div>
+                )}
                 <div className="flex justify-between gap-2">
                   <dt className="text-slate-400">Date</dt>
                   <dd>{formatDate(payment.createdAt)}</dd>

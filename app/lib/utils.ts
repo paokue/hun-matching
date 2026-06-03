@@ -38,13 +38,12 @@ export const OCCUPATIONS = [
 ] as const;
 
 export const EDUCATION_LEVELS = [
-  "Primary School (Grade 1–5)",
-  "Secondary School (Grade 6–7)",
-  "High School (Grade 8–12)",
-  "Vocational Certificate",
+  "No Education",
+  "Primary",
+  "Secondary",
+  "High School",
+  "Vocational",
   "Bachelor's Degree",
-  "Master's Degree",
-  "Other",
 ] as const;
 
 export const MARITAL_STATUS = [

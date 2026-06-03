@@ -36,9 +36,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     prisma.payment.findFirst({ where: { agencyId: session.userId, status: "pending" } }),
   ]);
 
-  const hasMembership =
-    process.env.MOCK_MEMBERSHIP === "true" ||
-    !!(agency.membershipExpiresAt && new Date(agency.membershipExpiresAt) > new Date());
+  const hasMembership = !!(agency.membershipExpiresAt && new Date(agency.membershipExpiresAt) > new Date());
 
   return { agency, activeSelections, hasMembership, pendingPayment: !!pendingPayment };
 }

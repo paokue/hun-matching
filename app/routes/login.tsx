@@ -17,7 +17,7 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await getUserFromSession(request);
   if (session?.role === "applicant") return redirect("/dashboard");
-  return null;
+  return { isDev: process.env.NODE_ENV !== "production" };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -41,10 +41,11 @@ export async function action({ request }: Route.ActionArgs) {
   return createUserSession(user.id, "applicant", "/dashboard");
 }
 
-export default function Login({ actionData }: Route.ComponentProps) {
+export default function Login({ loaderData, actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const t = useT();
+  const isDev = loaderData?.isDev ?? false;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -84,6 +85,7 @@ export default function Login({ actionData }: Route.ComponentProps) {
                 label={t.login.passwordLabel}
                 name="password"
                 type="password"
+                showPasswordToggle
                 placeholder={t.login.passwordPh}
                 required
               />
@@ -109,11 +111,13 @@ export default function Login({ actionData }: Route.ComponentProps) {
               </p>
             </Form>
 
-            <DevFill
-              credentials={[
-                { label: "🙍 Applicant", values: { phone: "0201234567", password: "Test1234!" } },
-              ]}
-            />
+            {isDev && (
+              <DevFill
+                credentials={[
+                  { label: "🙍 Applicant", values: { phone: "0201234567", password: "Test1234!" } },
+                ]}
+              />
+            )}
           </Card>
 
 

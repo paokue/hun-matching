@@ -16,7 +16,9 @@ export function meta(_: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAdmin(request);
-  const packages = await prisma.membershipPackage.findMany({ orderBy: { price: "asc" } });
+  const packages = await prisma.membershipPackage.findMany({
+    orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
+  });
   return { packages };
 }
 
@@ -26,14 +28,24 @@ export async function action({ request }: Route.ActionArgs) {
   const intent = formData.get("intent") as string;
   const featuresFromForm = () => ((formData.get("features") as string) || "").split("\n").map((f) => f.trim()).filter(Boolean);
 
+  const parsePrice2 = () => {
+    const raw = formData.get("price2");
+    if (raw == null || String(raw).trim() === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
   if (intent === "create") {
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const price = Number(formData.get("price"));
+    const price2 = parsePrice2();
     const durationDays = Number(formData.get("durationDays"));
+    const profileCount = Number(formData.get("profileCount")) || 0;
+    const sortOrder = Number(formData.get("sortOrder")) || 0;
     if (!name || !price || !durationDays) return { error: "Name, price, and duration are required." };
     await prisma.membershipPackage.create({
-      data: { name, description: description || undefined, price, durationDays, features: featuresFromForm(), isActive: true },
+      data: { name, description: description || undefined, price, price2, durationDays, profileCount, sortOrder, features: featuresFromForm(), isActive: true },
     });
     return { success: "Package created." };
   }
@@ -43,12 +55,15 @@ export async function action({ request }: Route.ActionArgs) {
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const price = Number(formData.get("price"));
+    const price2 = parsePrice2();
     const durationDays = Number(formData.get("durationDays"));
+    const profileCount = Number(formData.get("profileCount")) || 0;
+    const sortOrder = Number(formData.get("sortOrder")) || 0;
     const isActive = formData.get("isActive") === "on";
     if (!pkgId || !name || !price || !durationDays) return { error: "Name, price, and duration are required." };
     await prisma.membershipPackage.update({
       where: { id: pkgId },
-      data: { name, description: description || undefined, price, durationDays, features: featuresFromForm(), isActive },
+      data: { name, description: description || undefined, price, price2, durationDays, profileCount, sortOrder, features: featuresFromForm(), isActive },
     });
     return { success: "Package updated." };
   }
@@ -98,12 +113,24 @@ function PackageFormModal({ mode, pkg, onClose }: { mode: "create" | "update"; p
             <input name="name" required defaultValue={pkg?.name ?? ""} placeholder="e.g., Basic Plan" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
           </div>
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-600">Price (USD) *</label>
-            <input name="price" type="number" required min="1" defaultValue={pkg?.price ?? ""} placeholder="e.g., 99" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
+            <label className="block text-xs font-medium text-slate-600">Price 1 (USD) *</label>
+            <input name="price" type="number" required min="1" defaultValue={pkg?.price ?? ""} placeholder="e.g., 400" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-600">Price 2 (USD)</label>
+            <input name="price2" type="number" min="1" defaultValue={pkg?.price2 ?? ""} placeholder="Optional — e.g., 389" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
           </div>
           <div className="space-y-1">
             <label className="block text-xs font-medium text-slate-600">Duration (days) *</label>
             <input name="durationDays" type="number" required min="1" defaultValue={pkg?.durationDays ?? ""} placeholder="e.g., 30" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-600">Profile Count *</label>
+            <input name="profileCount" type="number" required min="0" defaultValue={pkg?.profileCount ?? 0} placeholder="e.g., 40" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-slate-600">Sort Order</label>
+            <input name="sortOrder" type="number" defaultValue={pkg?.sortOrder ?? 0} placeholder="Lower numbers show first" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 placeholder:text-slate-400" />
           </div>
           <div className="space-y-1">
             <label className="block text-xs font-medium text-slate-600">Description</label>
@@ -177,8 +204,16 @@ export default function AdminPackages({ loaderData, actionData }: Route.Componen
                     <Badge variant={pkg.isActive ? "success" : "default"}>{pkg.isActive ? "Active" : "Inactive"}</Badge>
                   </div>
                   {pkg.description && <p className="text-sm text-slate-500 mb-2">{pkg.description}</p>}
-                  <p className={`text-3xl font-extrabold ${c.price}`}>${pkg.price}</p>
-                  <p className="text-xs text-slate-400 mb-3">for {pkg.durationDays} days</p>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <p className={`text-3xl font-extrabold ${c.price}`}>${pkg.price}</p>
+                    {pkg.price2 != null && (
+                      <p className="text-base font-semibold text-slate-400 line-through">${pkg.price2}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mb-1">for {pkg.durationDays} days</p>
+                  <p className="text-xs text-slate-500 mb-3">
+                    <span className="font-semibold text-slate-700">{pkg.profileCount}</span> profiles · order <span className="font-semibold text-slate-700">#{pkg.sortOrder}</span>
+                  </p>
 
                   {pkg.features.length > 0 && (
                     <ul className="space-y-1 mb-4">

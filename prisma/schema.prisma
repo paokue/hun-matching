@@ -111,7 +111,10 @@ model MembershipPackage {
   name         String
   description  String?
   price        Float
+  price2       Float?
   durationDays Int
+  profileCount Int       @default(0)
+  sortOrder    Int       @default(0)
   features     String[]
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
@@ -128,8 +131,10 @@ model Payment {
   amount              Float
   currency            String            @default("USD")
   status              String            @default("pending")
+  paymentType         String            @default("qr")
   paymentMethod       String
   receiptUrl          String?
+  paymentPhone        String?
   notes               String?
   verifiedBy          String?           @db.ObjectId
   verifiedAt          DateTime?

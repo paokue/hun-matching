@@ -10,7 +10,7 @@ const LANGS = [
   { code: "lo", flag: "🇱🇦", label: "ລາວ" },
   { code: "ko", flag: "🇰🇷", label: "한국어" },
   { code: "en", flag: "🇬🇧", label: "English" },
-  { code: "hmn", flag: "🌺", label: "Hmoob" },
+  // { code: "hmn", flag: "🌺", label: "Hmoob" }, // hidden — translations remain available
 ] as const;
 
 function LanguageSwitcher() {
