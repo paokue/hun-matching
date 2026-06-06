@@ -3,6 +3,7 @@ import { Form, Link, redirect, useNavigation } from "react-router";
 import type { Route } from "./+types/register.4";
 import { requireUser } from "~/lib/auth.server";
 import { uploadToBunny, generateFilePath, parseMultipartForm } from "~/lib/bunny.server";
+import { compressImage } from "~/lib/compressImage";
 import { Button } from "~/components/ui/Button";
 import { StepIndicator } from "~/components/ui/StepIndicator";
 import { Navbar } from "~/components/layout/Navbar";
@@ -28,11 +29,20 @@ function FilePicker({ name, accept, title, dragHint, chooseLabel, noFileLabel, o
   const ref = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<{ name: string; url: string | null } | null>(null);
 
-  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+  async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const f = input.files?.[0];
     if (picked?.url) URL.revokeObjectURL(picked.url);
     if (!f) { setPicked(null); onPick?.(false); return; }
-    setPicked({ name: f.name, url: f.type.startsWith("image/") ? URL.createObjectURL(f) : null });
+    // PDFs pass through untouched; images get downscaled to keep the upload
+    // body inside hosting platform limits.
+    const out = f.type.startsWith("image/") ? await compressImage(f) : f;
+    if (out !== f) {
+      const dt = new DataTransfer();
+      dt.items.add(out);
+      input.files = dt.files;
+    }
+    setPicked({ name: out.name, url: out.type.startsWith("image/") ? URL.createObjectURL(out) : null });
     onPick?.(true);
   }
 
@@ -97,56 +107,64 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireUser(request);
-
-  const { files, fields } = await parseMultipartForm(request);
-  const docType = fields.docType as "nationalId" | "passport" | "familyDoc" | undefined;
-
-  if (fields.skip === "1") return redirect("/dashboard");
-
   const tr = getTranslations(getLocaleFromRequest(request)).register;
-  if (!docType) return { error: tr.errSelectDoc };
 
-  const owner = await prisma.user.findUnique({ where: { id: session.userId }, select: { phone: true } });
-  const fileKey = owner?.phone ?? session.userId;
+  try {
+    // Parsing the multipart body can throw on platforms that cap request size
+    // (Vercel 4.5 MB hobby, Netlify ~6 MB) — keep it inside the try so the
+    // user sees a friendly banner instead of the global ErrorBoundary.
+    const { files, fields } = await parseMultipartForm(request);
+    const docType = fields.docType as "nationalId" | "passport" | "familyDoc" | undefined;
 
-  const imgAllowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-  const MAX_BYTES = 30 * 1024 * 1024; // 30 MB per file
+    if (fields.skip === "1") return redirect("/dashboard");
+    if (!docType) return { error: tr.errSelectDoc };
 
-  // ID card — front + back as two separate files
-  if (docType === "nationalId") {
-    const front = files.nationalId_front?.[0];
-    const back = files.nationalId_back?.[0];
-    if (!front || !back) return { error: tr.errSelectFile };
-    if (!imgAllowed.includes(front.contentType) || !imgAllowed.includes(back.contentType)) {
+    const owner = await prisma.user.findUnique({ where: { id: session.userId }, select: { phone: true } });
+    const fileKey = owner?.phone ?? session.userId;
+
+    const imgAllowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    const MAX_BYTES = 30 * 1024 * 1024; // 30 MB per file
+
+    // ID card — front + back as two separate files
+    if (docType === "nationalId") {
+      const front = files.nationalId_front?.[0];
+      const back = files.nationalId_back?.[0];
+      if (!front || !back) return { error: tr.errSelectFile };
+      if (!imgAllowed.includes(front.contentType) || !imgAllowed.includes(back.contentType)) {
+        return { error: tr.errInvalidFileType };
+      }
+      if (front.buffer.length > MAX_BYTES || back.buffer.length > MAX_BYTES) {
+        return { error: tr.errFileTooLarge };
+      }
+      const frontUrl = await uploadToBunny(front.buffer, generateFilePath("documents/nationalId", fileKey, front.filename), front.contentType);
+      const backUrl = await uploadToBunny(back.buffer, generateFilePath("documents/nationalId", fileKey, back.filename), back.contentType);
+      await prisma.user.update({ where: { id: session.userId }, data: { nationalIdUrl: frontUrl, nationalIdBackUrl: backUrl } });
+      return redirect("/dashboard");
+    }
+
+    // Passport / Family booklet — single file
+    const file = files[docType]?.[0];
+    if (!file) return { error: tr.errSelectFile };
+
+    if (docType === "familyDoc") {
+      if (file.contentType !== "application/pdf") return { error: tr.errPdfOnly };
+    } else if (!imgAllowed.includes(file.contentType)) {
       return { error: tr.errInvalidFileType };
     }
-    if (front.buffer.length > MAX_BYTES || back.buffer.length > MAX_BYTES) {
-      return { error: tr.errFileTooLarge };
-    }
-    const frontUrl = await uploadToBunny(front.buffer, generateFilePath("documents/nationalId", fileKey, front.filename), front.contentType);
-    const backUrl = await uploadToBunny(back.buffer, generateFilePath("documents/nationalId", fileKey, back.filename), back.contentType);
-    await prisma.user.update({ where: { id: session.userId }, data: { nationalIdUrl: frontUrl, nationalIdBackUrl: backUrl } });
+    if (file.buffer.length > MAX_BYTES) return { error: tr.errFileTooLarge };
+
+    const path = generateFilePath(`documents/${docType}`, fileKey, file.filename);
+    const url = await uploadToBunny(file.buffer, path, file.contentType);
+
+    const fieldMap: Record<string, string> = { passport: "passportUrl", familyDoc: "familyDocUrl" };
+    await prisma.user.update({ where: { id: session.userId }, data: { [fieldMap[docType]]: url } });
+
     return redirect("/dashboard");
+  } catch (err) {
+    console.error("[register/4] failed:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return { error: `${tr.errSubmitFailed ?? "Could not upload your document."} (${message})` };
   }
-
-  // Passport / Family booklet — single file
-  const file = files[docType]?.[0];
-  if (!file) return { error: tr.errSelectFile };
-
-  if (docType === "familyDoc") {
-    if (file.contentType !== "application/pdf") return { error: tr.errPdfOnly };
-  } else if (!imgAllowed.includes(file.contentType)) {
-    return { error: tr.errInvalidFileType };
-  }
-  if (file.buffer.length > MAX_BYTES) return { error: tr.errFileTooLarge };
-
-  const path = generateFilePath(`documents/${docType}`, fileKey, file.filename);
-  const url = await uploadToBunny(file.buffer, path, file.contentType);
-
-  const fieldMap: Record<string, string> = { passport: "passportUrl", familyDoc: "familyDocUrl" };
-  await prisma.user.update({ where: { id: session.userId }, data: { [fieldMap[docType]]: url } });
-
-  return redirect("/dashboard");
 }
 
 export default function RegisterStep4({ loaderData, actionData }: Route.ComponentProps) {

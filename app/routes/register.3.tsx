@@ -8,6 +8,7 @@ import type { Route } from "./+types/register.3";
 import { hashPassword, createUserSession } from "~/lib/auth.server";
 import { getRegUserId, refreshRegCookie, destroyRegCookie } from "~/lib/registration.server";
 import { uploadToBunny, generateFilePath, parseMultipartForm } from "~/lib/bunny.server";
+import { compressImage } from "~/lib/compressImage";
 import { getLocaleFromRequest } from "~/lib/locale.server";
 import { getTranslations } from "~/locales";
 
@@ -49,28 +50,32 @@ export async function action({ request }: Route.ActionArgs) {
     return redirect("/register", { headers: { "Set-Cookie": destroyCookie } });
   }
 
-  const { files, fields } = await parseMultipartForm(request);
-  const g = (k: string) => (fields[k] ?? "").trim();
-
-  const phone = g("phone");
-  const secondaryPhone = g("secondaryPhone");
-  const facebookUrl = g("facebookUrl");
-  const tiktokUrl = g("tiktokUrl");
-  const password = fields.password ?? "";
-  const confirmPassword = fields.confirmPassword ?? "";
-
   const tr = getTranslations(getLocaleFromRequest(request)).register;
-  const errors: Record<string, string> = {};
-  if (!phone) errors.phone = tr.errPhoneRequired;
-  if (!password) errors.password = tr.errPasswordLength;
-  if (password !== confirmPassword) errors.confirmPassword = tr.errPasswordMatch;
-
-  const phoneExists = phone ? await prisma.user.findFirst({ where: { phone, NOT: { id: uid } } }) : null;
-  if (phoneExists) errors.phone = tr.errPhoneExists;
-
-  if (Object.keys(errors).length > 0) return { errors };
 
   try {
+    // Multipart parsing can throw if the platform's request-body limit is hit
+    // (Vercel 4.5 MB hobby, Netlify ~6 MB) — keep it inside the try so the
+    // user sees a friendly banner instead of the global ErrorBoundary.
+    const { files, fields } = await parseMultipartForm(request);
+    const g = (k: string) => (fields[k] ?? "").trim();
+
+    const phone = g("phone");
+    const secondaryPhone = g("secondaryPhone");
+    const facebookUrl = g("facebookUrl");
+    const tiktokUrl = g("tiktokUrl");
+    const password = fields.password ?? "";
+    const confirmPassword = fields.confirmPassword ?? "";
+
+    const errors: Record<string, string> = {};
+    if (!phone) errors.phone = tr.errPhoneRequired;
+    if (!password) errors.password = tr.errPasswordLength;
+    if (password !== confirmPassword) errors.confirmPassword = tr.errPasswordMatch;
+
+    const phoneExists = phone ? await prisma.user.findFirst({ where: { phone, NOT: { id: uid } } }) : null;
+    if (phoneExists) errors.phone = tr.errPhoneExists;
+
+    if (Object.keys(errors).length > 0) return { errors };
+
     // Profile image (≤ 30 MB)
     let profileImageUrl: string | undefined;
     const profileFile = files.profileImage?.[0];
@@ -132,14 +137,26 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
   const [gallery, setGallery] = useState<{ file: File; url: string }[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
 
-  function onProfileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onProfileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
-    if (f && f.size > MAX_BYTES) {
+    if (!f) {
+      setProfilePreview(user.profileImage ?? "");
+      return;
+    }
+    if (f.size > MAX_BYTES) {
       toast.error(r.imageTooLargeToast);
       e.target.value = "";
       return;
     }
-    setProfilePreview(f ? URL.createObjectURL(f) : (user.profileImage ?? ""));
+    // Shrink large camera photos to fit within platform upload limits.
+    const compressed = await compressImage(f);
+    setProfilePreview(URL.createObjectURL(compressed));
+    // Replace the file in the input so the upload uses the compressed version.
+    if (e.target && compressed !== f) {
+      const dt = new DataTransfer();
+      dt.items.add(compressed);
+      e.target.files = dt.files;
+    }
   }
 
   function syncInput(items: { file: File; url: string }[]) {
@@ -149,7 +166,7 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
     galleryRef.current.files = dt.files;
   }
 
-  function onGalleryAdd(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onGalleryAdd(e: React.ChangeEvent<HTMLInputElement>) {
     const incoming = Array.from(e.target.files ?? []);
     const next = [...gallery];
     let rejectedSize = false;
@@ -157,7 +174,8 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
     for (const f of incoming) {
       if (next.length >= MAX_IMAGES) { rejectedMax = true; break; }
       if (f.size > MAX_BYTES) { rejectedSize = true; continue; }
-      next.push({ file: f, url: URL.createObjectURL(f) });
+      const compressed = await compressImage(f);
+      next.push({ file: compressed, url: URL.createObjectURL(compressed) });
     }
     if (rejectedSize) toast.error(r.imageTooLargeToast);
     if (rejectedMax) toast.error(r.maxImagesReached);
