@@ -19,7 +19,7 @@ export async function action({ request }: Route.ActionArgs) {
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
-  if (!newPassword || newPassword.length < 8) return { error: "New password must be at least 8 characters." };
+  if (!newPassword) return { error: "New password is required." };
   if (newPassword !== confirmPassword) return { error: "Passwords do not match." };
 
   const agency = await prisma.agency.findFirst({

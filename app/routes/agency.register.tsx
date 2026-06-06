@@ -43,7 +43,7 @@ export async function action({ request }: Route.ActionArgs) {
   const errors: Record<string, string> = {};
   if (!companyName?.trim()) errors.companyName = tr.errCompanyName;
   if (!email?.trim() || !/\S+@\S+\.\S+/.test(email)) errors.email = tr.errEmail;
-  if (!password || password.length < 8) errors.password = tr.errPassword;
+  if (!password) errors.password = tr.errPassword;
   if (password !== confirmPassword) errors.confirmPassword = tr.errPasswordMatch;
   if (Object.keys(errors).length > 0) return { errors, values: Object.fromEntries(formData) };
 

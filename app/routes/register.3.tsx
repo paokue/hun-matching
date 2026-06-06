@@ -41,6 +41,14 @@ export async function action({ request }: Route.ActionArgs) {
   const uid = await getRegUserId(request);
   if (!uid) return redirect("/register");
 
+  // Defensive: the cookie may outlive the User row (admin delete, DB reset, etc.).
+  // If the user no longer exists, clear the stale cookie and send them to step 1.
+  const exists = await prisma.user.findUnique({ where: { id: uid }, select: { id: true } });
+  if (!exists) {
+    const destroyCookie = await destroyRegCookie(request);
+    return redirect("/register", { headers: { "Set-Cookie": destroyCookie } });
+  }
+
   const { files, fields } = await parseMultipartForm(request);
   const g = (k: string) => (fields[k] ?? "").trim();
 
@@ -54,7 +62,7 @@ export async function action({ request }: Route.ActionArgs) {
   const tr = getTranslations(getLocaleFromRequest(request)).register;
   const errors: Record<string, string> = {};
   if (!phone) errors.phone = tr.errPhoneRequired;
-  if (!password || password.length < 8) errors.password = tr.errPasswordLength;
+  if (!password) errors.password = tr.errPasswordLength;
   if (password !== confirmPassword) errors.confirmPassword = tr.errPasswordMatch;
 
   const phoneExists = phone ? await prisma.user.findFirst({ where: { phone, NOT: { id: uid } } }) : null;
@@ -62,47 +70,53 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (Object.keys(errors).length > 0) return { errors };
 
-  // Profile image (≤ 30 MB)
-  let profileImageUrl: string | undefined;
-  const profileFile = files.profileImage?.[0];
-  if (profileFile && profileFile.contentType.startsWith("image/") && profileFile.buffer.length <= MAX_BYTES) {
-    const path = generateFilePath("profile", phone, profileFile.filename);
-    profileImageUrl = await uploadToBunny(profileFile.buffer, path, profileFile.contentType);
-  }
+  try {
+    // Profile image (≤ 30 MB)
+    let profileImageUrl: string | undefined;
+    const profileFile = files.profileImage?.[0];
+    if (profileFile && profileFile.contentType.startsWith("image/") && profileFile.buffer.length <= MAX_BYTES) {
+      const path = generateFilePath("profile", phone, profileFile.filename);
+      profileImageUrl = await uploadToBunny(profileFile.buffer, path, profileFile.contentType);
+    }
 
-  // Gallery images (≤ 10, each ≤ 30 MB) → GalleryImage table (+ mirror into photos[])
-  const galleryUrls: string[] = [];
-  for (const file of (files.gallery ?? []).slice(0, MAX_IMAGES)) {
-    if (!file.contentType.startsWith("image/")) continue;
-    if (file.buffer.length > MAX_BYTES) continue;
-    const path = generateFilePath("gallery", phone, file.filename);
-    galleryUrls.push(await uploadToBunny(file.buffer, path, file.contentType));
-  }
-  if (galleryUrls.length > 0) {
-    await prisma.galleryImage.createMany({
-      data: galleryUrls.map((url, i) => ({ userId: uid, url, order: i })),
+    // Gallery images (≤ 10, each ≤ 30 MB) → GalleryImage table (+ mirror into photos[])
+    const galleryUrls: string[] = [];
+    for (const file of (files.gallery ?? []).slice(0, MAX_IMAGES)) {
+      if (!file.contentType.startsWith("image/")) continue;
+      if (file.buffer.length > MAX_BYTES) continue;
+      const path = generateFilePath("gallery", phone, file.filename);
+      galleryUrls.push(await uploadToBunny(file.buffer, path, file.contentType));
+    }
+    if (galleryUrls.length > 0) {
+      await prisma.galleryImage.createMany({
+        data: galleryUrls.map((url, i) => ({ userId: uid, url, order: i })),
+      });
+    }
+
+    await prisma.user.update({
+      where: { id: uid },
+      data: {
+        phone,
+        secondaryPhone: secondaryPhone || undefined,
+        facebookUrl: facebookUrl || undefined,
+        tiktokUrl: tiktokUrl || undefined,
+        password: await hashPassword(password),
+        ...(profileImageUrl ? { profileImage: profileImageUrl } : {}),
+        ...(galleryUrls.length ? { photos: { push: galleryUrls } } : {}),
+      },
     });
+
+    // Account created — log them in and clear the registration cookie.
+    // createUserSession returns a React-Router `redirect()` Response with both
+    // Set-Cookie headers attached, so the framework intercepts it and the
+    // browser navigates to /register/4 instead of stalling.
+    const destroyCookie = await destroyRegCookie(request);
+    return createUserSession(uid, "applicant", "/register/4", [destroyCookie]);
+  } catch (err) {
+    console.error("[register/3] failed:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return { errors: { _form: `${tr.errSubmitFailed ?? "Could not save your details."} (${message})` } };
   }
-
-  await prisma.user.update({
-    where: { id: uid },
-    data: {
-      phone,
-      secondaryPhone: secondaryPhone || undefined,
-      facebookUrl: facebookUrl || undefined,
-      tiktokUrl: tiktokUrl || undefined,
-      password: await hashPassword(password),
-      ...(profileImageUrl ? { profileImage: profileImageUrl } : {}),
-      ...(galleryUrls.length ? { photos: { push: galleryUrls } } : {}),
-    },
-  });
-
-  // Account created — log them in and clear the registration cookie
-  const destroyCookie = await destroyRegCookie(request);
-  const authResponse = await createUserSession(uid, "applicant", "/register/4");
-  const headers = new Headers(authResponse.headers);
-  headers.append("Set-Cookie", destroyCookie);
-  return new Response(null, { status: 302, headers });
 }
 
 export default function RegisterStep3({ loaderData, actionData }: Route.ComponentProps) {
@@ -174,6 +188,11 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
           <StepIndicator current={3} />
 
           <Form method="post" encType="multipart/form-data" className="space-y-5">
+            {errors._form && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {errors._form}
+              </div>
+            )}
             {/* Contact & Social + Account */}
             <Card>
               <CardHeader>
@@ -188,8 +207,8 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
                   <Input label={r.secondaryPhoneLabel} name="secondaryPhone" type="tel" placeholder={r.secondaryPhonePh} defaultValue={user.secondaryPhone ?? ""} />
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input label={r.facebookUrlLabel} required name="facebookUrl" type="url" placeholder={r.facebookUrlPh} defaultValue={user.facebookUrl ?? ""} />
-                  <Input label={r.tiktokUrlLabel} required name="tiktokUrl" type="url" placeholder={r.tiktokUrlPh} defaultValue={user.tiktokUrl ?? ""} />
+                  <Input label={r.facebookUrlLabel} required name="facebookUrl" type="text" placeholder={r.facebookUrlPh} defaultValue={user.facebookUrl ?? ""} />
+                  <Input label={r.tiktokUrlLabel} required name="tiktokUrl" type="text" placeholder={r.tiktokUrlPh} defaultValue={user.tiktokUrl ?? ""} />
                 </div>
 
                 {/* Sub-divider */}
@@ -200,7 +219,7 @@ export default function RegisterStep3({ loaderData, actionData }: Route.Componen
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input label={r.passwordLabel} name="password" showPasswordToggle placeholder={r.passwordPh} required error={errors.password} hint={r.passwordHint} />
+                  <Input label={r.passwordLabel} name="password" showPasswordToggle placeholder={r.passwordPh} required error={errors.password} />
                   <Input label={r.confirmPasswordLabel} name="confirmPassword" showPasswordToggle placeholder={r.confirmPasswordPh} required error={errors.confirmPassword} />
                 </div>
               </div>

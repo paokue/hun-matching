@@ -37,13 +37,23 @@ export function verifyToken(token: string) {
   }
 }
 
-export async function createUserSession(userId: string, role: string, redirectTo: string) {
+export async function createUserSession(
+  userId: string,
+  role: string,
+  redirectTo: string,
+  extraCookies: string[] = [],
+) {
   const session = await sessionStorage.getSession();
   const token = signToken({ userId, role });
   session.set("token", token);
-  return redirect(redirectTo, {
-    headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
-  });
+  const sessionCookie = await sessionStorage.commitSession(session);
+  // Multiple Set-Cookie headers must be expressed as an array of tuples so
+  // each cookie survives into the response.
+  const headers: HeadersInit = [
+    ["Set-Cookie", sessionCookie],
+    ...extraCookies.map((c) => ["Set-Cookie", c] as [string, string]),
+  ];
+  return redirect(redirectTo, { headers });
 }
 
 export async function getUserFromSession(request: Request) {

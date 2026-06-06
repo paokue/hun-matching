@@ -44,6 +44,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
   if (!allowedTypes.includes(file.contentType)) return { error: tr.errInvalidType };
+  if (file.buffer.length > 30 * 1024 * 1024) return { error: tr.errFileTooLarge };
 
   const path = generateFilePath(`documents/${docType}`, owner?.phone ?? session.userId, file.filename);
   const url = await uploadToBunny(file.buffer, path, file.contentType);

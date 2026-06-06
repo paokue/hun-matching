@@ -87,11 +87,16 @@ export async function action({ request }: Route.ActionArgs) {
     religion: religion || undefined,
   };
 
-  // If a registration is already in progress, update it instead of creating a duplicate
+  // If a registration is already in progress and the row still exists, update it.
+  // If the row was deleted, fall through to create-a-fresh-user below so a stale
+  // cookie can't break the flow.
   const existingUid = await getRegUserId(request);
   if (existingUid) {
-    await prisma.user.update({ where: { id: existingUid }, data });
-    return redirect("/register/2");
+    const stillExists = await prisma.user.findUnique({ where: { id: existingUid }, select: { id: true } });
+    if (stillExists) {
+      await prisma.user.update({ where: { id: existingUid }, data });
+      return redirect("/register/2");
+    }
   }
 
   let profileId = autoProfileId();

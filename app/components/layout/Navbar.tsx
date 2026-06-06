@@ -87,7 +87,7 @@ export function Navbar({ user }: NavbarProps) {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 shrink-0">
             <img src="/favicon.svg" alt="" className="w-8 h-8" />
-            <span className="font-bold text-lg text-slate-900 inline">HanMatching</span>
+            <span className="font-bold text-md sm:text-lg text-slate-900 inline">HanMatching</span>
           </Link>
 
           {/* Right: language switcher + logout */}

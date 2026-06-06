@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Form, Link, redirect, useNavigation } from "react-router";
 import type { Route } from "./+types/register.4";
 import { requireUser } from "~/lib/auth.server";
@@ -16,13 +16,14 @@ export function meta(_: Route.MetaArgs) {
 }
 
 // Custom centered file picker with translated button + live preview (module-level so its state persists)
-function FilePicker({ name, accept, title, dragHint, chooseLabel, noFileLabel }: {
+function FilePicker({ name, accept, title, dragHint, chooseLabel, noFileLabel, onPick }: {
   name: string;
   accept: string;
   title?: string;
   dragHint: string;
   chooseLabel: string;
   noFileLabel: string;
+  onPick?: (hasFile: boolean) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<{ name: string; url: string | null } | null>(null);
@@ -30,8 +31,9 @@ function FilePicker({ name, accept, title, dragHint, chooseLabel, noFileLabel }:
   function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (picked?.url) URL.revokeObjectURL(picked.url);
-    if (!f) { setPicked(null); return; }
+    if (!f) { setPicked(null); onPick?.(false); return; }
     setPicked({ name: f.name, url: f.type.startsWith("image/") ? URL.createObjectURL(f) : null });
+    onPick?.(true);
   }
 
   return (
@@ -108,6 +110,7 @@ export async function action({ request }: Route.ActionArgs) {
   const fileKey = owner?.phone ?? session.userId;
 
   const imgAllowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+  const MAX_BYTES = 30 * 1024 * 1024; // 30 MB per file
 
   // ID card — front + back as two separate files
   if (docType === "nationalId") {
@@ -116,6 +119,9 @@ export async function action({ request }: Route.ActionArgs) {
     if (!front || !back) return { error: tr.errSelectFile };
     if (!imgAllowed.includes(front.contentType) || !imgAllowed.includes(back.contentType)) {
       return { error: tr.errInvalidFileType };
+    }
+    if (front.buffer.length > MAX_BYTES || back.buffer.length > MAX_BYTES) {
+      return { error: tr.errFileTooLarge };
     }
     const frontUrl = await uploadToBunny(front.buffer, generateFilePath("documents/nationalId", fileKey, front.filename), front.contentType);
     const backUrl = await uploadToBunny(back.buffer, generateFilePath("documents/nationalId", fileKey, back.filename), back.contentType);
@@ -132,6 +138,7 @@ export async function action({ request }: Route.ActionArgs) {
   } else if (!imgAllowed.includes(file.contentType)) {
     return { error: tr.errInvalidFileType };
   }
+  if (file.buffer.length > MAX_BYTES) return { error: tr.errFileTooLarge };
 
   const path = generateFilePath(`documents/${docType}`, fileKey, file.filename);
   const url = await uploadToBunny(file.buffer, path, file.contentType);
@@ -147,8 +154,24 @@ export default function RegisterStep4({ loaderData, actionData }: Route.Componen
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const [selected, setSelected] = useState<string>("");
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
   const t = useT();
   const r = t.register;
+
+  // When the document type changes, any previously picked files are unmounted
+  // and lost — reset our tracking too so the submit button reflects reality.
+  useEffect(() => { setPicked({}); }, [selected]);
+
+  const setPickedFor = (name: string) => (has: boolean) =>
+    setPicked((prev) => ({ ...prev, [name]: has }));
+
+  const filesReady =
+    selected === "nationalId" ? Boolean(picked.nationalId_front && picked.nationalId_back)
+      : selected === "passport" ? Boolean(picked.passport)
+      : selected === "familyDoc" ? Boolean(picked.familyDoc)
+      : false;
+
+  const canSubmit = Boolean(selected) && filesReady && !isSubmitting;
 
   const iconCls = "w-6 h-6";
   const DOC_TYPES = [
@@ -244,19 +267,19 @@ export default function RegisterStep4({ loaderData, actionData }: Route.Componen
                 {selected === "nationalId" ? (
                   <>
                     <div className="grid sm:grid-cols-2 gap-4">
-                      <FilePicker name="nationalId_front" accept="image/*,.pdf" title={r.idFrontLabel} dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} />
-                      <FilePicker name="nationalId_back" accept="image/*,.pdf" title={r.idBackLabel} dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} />
+                      <FilePicker name="nationalId_front" accept="image/*,.pdf" title={r.idFrontLabel} dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} onPick={setPickedFor("nationalId_front")} />
+                      <FilePicker name="nationalId_back" accept="image/*,.pdf" title={r.idBackLabel} dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} onPick={setPickedFor("nationalId_back")} />
                     </div>
                     <p className="text-xs text-slate-400 text-center">{r.acceptedDocs}</p>
                   </>
                 ) : selected === "familyDoc" ? (
                   <>
-                    <FilePicker name="familyDoc" accept="application/pdf,.pdf" dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} />
+                    <FilePicker name="familyDoc" accept="application/pdf,.pdf" dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} onPick={setPickedFor("familyDoc")} />
                     <p className="text-xs text-slate-400 text-center">{r.acceptedPdfOnly}</p>
                   </>
                 ) : (
                   <>
-                    <FilePicker name="passport" accept="image/*,.pdf" dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} />
+                    <FilePicker name="passport" accept="image/*,.pdf" dragHint={r.dragDropClick} chooseLabel={r.chooseFileBtn} noFileLabel={r.noFileChosen} onPick={setPickedFor("passport")} />
                     <p className="text-xs text-slate-400 text-center">{r.acceptedDocs}</p>
                   </>
                 )}
@@ -268,7 +291,7 @@ export default function RegisterStep4({ loaderData, actionData }: Route.Componen
               size="lg"
               loading={isSubmitting}
               className="w-full"
-              disabled={!selected}
+              disabled={!canSubmit}
             >
               {isSubmitting ? r.uploadingBtn : r.uploadCompleteBtn}
             </Button>

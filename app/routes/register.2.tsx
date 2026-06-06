@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/Button";
 import { Card, CardHeader, CardTitle } from "~/components/ui/Card";
 import { StepIndicator } from "~/components/ui/StepIndicator";
 import { Navbar } from "~/components/layout/Navbar";
-import { getRegUserId, refreshRegCookie } from "~/lib/registration.server";
+import { getRegUserId, refreshRegCookie, destroyRegCookie } from "~/lib/registration.server";
 import { LAO_PROVINCES } from "~/lib/utils";
 import { useT } from "~/lib/i18n";
 import { prisma } from "~/lib/prisma.server";
@@ -26,6 +26,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const uid = await getRegUserId(request);
   if (!uid) return redirect("/register");
+
+  // If the in-progress User row was deleted, restart cleanly.
+  const exists = await prisma.user.findUnique({ where: { id: uid }, select: { id: true } });
+  if (!exists) {
+    const destroyCookie = await destroyRegCookie(request);
+    return redirect("/register", { headers: { "Set-Cookie": destroyCookie } });
+  }
 
   const formData = await request.formData();
   const g = (k: string) => (formData.get(k) as string | null) ?? "";
